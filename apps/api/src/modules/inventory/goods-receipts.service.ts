@@ -112,6 +112,15 @@ export class GoodsReceiptsService {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const po: any = await (tx as any).purchaseOrder.findUnique({ where: { id: before.purchaseOrderId }, include: { lines: true } });
       if (!po) throw new NotFoundException('Purchase order not found');
+      // A receipt must never post against a PO that is no longer open:
+      // posting against a CANCELLED/CLOSED/DRAFT PO would resurrect it
+      // (flip it to PARTIALLY_RECEIVED) and move stock + post a journal
+      // for goods that were never ordered. Re-checked here (not just at
+      // create time) because the PO can change status while the receipt
+      // sits in DRAFT.
+      if (po.status === 'CANCELLED' || po.status === 'CLOSED' || po.status === 'DRAFT') {
+        throw new BadRequestException(`Cannot post a goods receipt against a ${po.status} purchase order`);
+      }
       // Receiving must not exceed the PO ordered quantity (net of receipts).
       for (const line of before.lines) {
         const poLine = po.lines.find((l: any) => l.id === line.purchaseOrderLineId);
