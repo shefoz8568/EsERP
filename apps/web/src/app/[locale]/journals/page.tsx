@@ -95,6 +95,13 @@ export default function JournalsPage({ params }: { params: Promise<{ locale: str
     onError: (err) => toast.error(err instanceof Error ? err.message : t("common.error")),
   });
 
+  // Same endpoint + guard as the journal detail page (POSTED only).
+  const reverse = useMutation({
+    mutationFn: (id: string) => accountingApi.reverseJournal(id),
+    onSuccess: () => { toast.success(t("common.success")); invalidate(); },
+    onError: (err) => toast.error(err instanceof Error ? err.message : t("common.error")),
+  });
+
   const setLine = (i: number, patch: Partial<DraftLine>) =>
     setLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
@@ -132,6 +139,8 @@ export default function JournalsPage({ params }: { params: Promise<{ locale: str
       cell: ({ row }) =>
         row.original.status === "DRAFT" ? (
           <Button size="sm" onClick={() => post.mutate(row.original.id)}>{t("accounting.post")}</Button>
+        ) : row.original.status === "POSTED" ? (
+          <Button size="sm" variant="outline" onClick={() => reverse.mutate(row.original.id)}>{t("accounting.reverse")}</Button>
         ) : (
           <span className="text-sm text-muted-foreground">—</span>
         ),
@@ -261,6 +270,12 @@ export default function JournalsPage({ params }: { params: Promise<{ locale: str
                     label: t("accounting.post"),
                     disabled: (rows) => !rows.some((r) => r.status === "DRAFT"),
                     onClick: (rows) => rows.filter((r) => r.status === "DRAFT").forEach((r) => post.mutate(r.id)),
+                  },
+                  {
+                    id: "reverse",
+                    label: t("accounting.reverse"),
+                    disabled: (rows) => !rows.some((r) => r.status === "POSTED"),
+                    onClick: (rows) => rows.filter((r) => r.status === "POSTED").forEach((r) => reverse.mutate(r.id)),
                   },
                 ]}
                 savedViews={[
