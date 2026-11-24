@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { cn } from "@eserp/ui";
 import { NAV_ITEMS, findNavItem, type NavItem } from "@/lib/nav";
+import { useAuth } from "@/lib/auth";
+import { isAdminUser } from "@/lib/permissions";
 import {
   recordRecent,
   readRecents,
@@ -80,6 +82,11 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>([]);
+  const { user } = useAuth();
+  // Same admin rule as the sidebar: admin-only entries (Users, Roles,
+  // API Keys, Providers, Webhooks) are hidden from non-admin roles.
+  // An unknown/empty role list fails open, the API still enforces.
+  const isAdmin = isAdminUser(user?.roles);
   const { theme, setTheme } = useThemePreference();
   const { density, setDensity } = useDensity();
 
@@ -100,7 +107,7 @@ export function CommandPalette({
 
   const entries = useMemo(() => {
     const q = query.trim();
-    const pages: PaletteEntry[] = NAV_ITEMS.map((item) => {
+    const pages: PaletteEntry[] = NAV_ITEMS.filter((item) => !item.requiresAdmin || isAdmin).map((item) => {
       const label = t(item.key as never) as string;
       const group = t(`shell.groups.${item.group}` as never) as string;
       return {
@@ -178,7 +185,7 @@ export function CommandPalette({
       ? []
       : recents
           .map((href) => findNavItem(href))
-          .filter((n): n is NavItem => !!n)
+          .filter((n): n is NavItem => !!n && (!n.requiresAdmin || isAdmin))
           .map((item) => ({
             id: `recent:${item.href}`,
             label: t(item.key as never) as string,
@@ -191,7 +198,7 @@ export function CommandPalette({
     const sorted = (list: PaletteEntry[]) =>
       [...list].sort((a, b) => b.score - a.score);
     return { recentEntries, pages: sorted(pages), actions: sorted(actions) };
-  }, [query, recents, theme, density, locale]);
+  }, [query, recents, theme, density, locale, pathname, t, isAdmin]);
 
   const flat = useMemo(
     () => [...entries.recentEntries, ...entries.pages, ...entries.actions],
