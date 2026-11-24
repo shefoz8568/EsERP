@@ -1,0 +1,2523 @@
+// EsERP Phase 0 — Prisma schema.
+// Conventions: every table id is String @id @default(uuid(7)); every
+// tenant-scoped table carries tenantId + createdAt/updatedAt/createdBy and a
+// @@index on tenantId. Money is integer minor units (BigInt) + currency code;
+// quantities are BigInt minor units too — never floats.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                   String   @id @default(uuid(7))
+  name                 String
+  slug                 String   @unique
+  defaultCurrency      String   @default("SAR")
+  defaultLocale        String   @default("ar")
+  fiscalYearStartMonth Int      @default(1)
+  calendarType         String   @default("gregorian")
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  createdBy            String?
+
+  users          User[]
+  roles          Role[]
+  companyProfile CompanyProfile?
+  onboarding     OnboardingState?
+}
+
+model User {
+  id            String   @id @default(uuid(7))
+  tenantId      String
+  email         String
+  passwordHash  String?
+  oauthProvider String?
+  oauthSubject  String?
+  firstName     String?
+  lastName      String?
+  mfaEnabled    Boolean  @default(false)
+  locale        String   @default("en")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles     UserRole[]
+  refreshTokens RefreshToken[]
+  mfaSecret     MfaSecret?
+  invitations   Invitation[]   @relation("InvitedBy")
+  auditLogs     AuditLog[]     @relation("AuditActor")
+  managedProjects Project[]    @relation("ProjectManager")
+
+  @@unique([email, tenantId])
+  @@index([tenantId])
+  @@index([oauthProvider, oauthSubject])
+}
+
+model Role {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([name, tenantId])
+  @@index([tenantId])
+}
+
+model Permission {
+  id          String   @id @default(uuid(7))
+  name        String   @unique
+  module      String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+}
+
+model RolePermission {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([tenantId])
+  @@index([roleId])
+}
+
+model UserRole {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid(7))
+  tenantId  String
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model MfaSecret {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  userId    String   @unique
+  secret    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  tenantId   String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model CompanyProfile {
+  id                     String   @id @default(uuid(7))
+  tenantId               String   @unique
+  legalName              String?
+  tradeName              String?
+  taxNumber              String?
+  commercialRegistration String?
+  phone                  String?
+  email                  String?
+  website                String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  region                 String?
+  postalCode             String?
+  country                String   @default("SA")
+  logoFileId             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Currency {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  code      String
+  name      String
+  symbol    String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+model ExchangeRate {
+  id               String   @id @default(uuid(7))
+  tenantId         String
+  fromCurrencyCode String
+  toCurrencyCode   String
+  rateNumerator    BigInt
+  rateDenominator  BigInt   @default(1)
+  effectiveDate    DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  @@unique([fromCurrencyCode, toCurrencyCode, effectiveDate, tenantId])
+  @@index([tenantId])
+}
+
+model TaxRate {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  name        String
+  nameAr      String?
+  rateBps     Int
+  type        String   @default("standard")
+  isInclusive Boolean  @default(false)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  items Item[]
+
+  journalLines JournalEntryLine[]
+
+  @@unique([name, tenantId])
+  @@index([tenantId])
+}
+
+model UnitOfMeasure {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  code         String
+  name         String
+  nameAr       String?
+  baseUnitCode String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  conversionsFrom UomConversion[] @relation("ConversionFrom")
+  conversionsTo   UomConversion[] @relation("ConversionTo")
+  items           Item[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+model UomConversion {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  fromUomId         String
+  toUomId           String
+  factorNumerator   BigInt
+  factorDenominator BigInt   @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  fromUom UnitOfMeasure @relation("ConversionFrom", fields: [fromUomId], references: [id], onDelete: Cascade)
+  toUom   UnitOfMeasure @relation("ConversionTo", fields: [toUomId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUomId, toUomId, tenantId])
+  @@index([tenantId])
+}
+
+model NumberingSeries {
+  id         String   @id @default(uuid(7))
+  tenantId   String
+  code       String
+  name       String
+  pattern    String
+  nextNumber Int      @default(1)
+  prefix     String?
+  suffix     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+model Warehouse {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  name      String
+  nameAr    String?
+  code      String?
+  address   String?
+  city      String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  stockLevels StockLevel[]
+  stockCostLayers StockCostLayer[]
+  movements StockMovement[] @relation("MovementWarehouse")
+  incomingMovements StockMovement[] @relation("MovementDestination")
+  goodsReceipts GoodsReceipt[]
+  deliveryNotes DeliveryNote[]
+  stockAdjustments StockAdjustment[]
+  transfersFrom StockTransfer[] @relation("TransferFrom")
+  transfersTo StockTransfer[] @relation("TransferTo")
+  stockCounts StockCount[]
+  posTerminals PosTerminal[]
+  workOrders WorkOrder[]
+  materialIssues MaterialIssue[]
+  productionReceipts ProductionReceipt[]
+  scraps Scrap[]
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+model Branch {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  name      String
+  nameAr    String?
+  code      String?
+  city      String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  posTerminals PosTerminal[]
+  employees Employee[]
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+model ChartOfAccounts {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  code      String
+  nameAr    String
+  nameEn    String
+  type      String
+  parentId  String?
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  parent   ChartOfAccounts?  @relation("CoAParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children ChartOfAccounts[] @relation("CoAParent")
+  journalLines     JournalEntryLine[]
+  openingBalances  OpeningBalance[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model Notification {
+  id        String    @id @default(uuid(7))
+  tenantId  String
+  userId    String?
+  title     String
+  body      String?
+  type      String    @default("info")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String    @id @default(uuid(7))
+  tenantId    String
+  email       String
+  roleNames   String[]
+  tokenHash   String
+  invitedById String?
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+
+  invitedBy User? @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([email, tenantId])
+  @@index([tenantId])
+}
+
+model OnboardingState {
+  id             String    @id @default(uuid(7))
+  tenantId       String    @unique
+  currentStep    Int       @default(0)
+  stepsCompleted Json      @default("[]")
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model FileAsset {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  fileName    String
+  contentType String
+  sizeBytes   BigInt
+  storageKey  String
+  bucket      String
+  purpose     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  @@index([tenantId])
+  @@index([storageKey])
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid(7))
+  tenantId    String
+  eventType   String
+  aggregateId String?
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+
+  @@index([tenantId])
+  @@index([publishedAt])
+  @@index([eventType])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 — Master Data
+// Conventions as Phase 0: UUIDv7 ids; tenantId/createdAt/updatedAt/createdBy
+// + @@index([tenantId]) on every tenant table; money = BigInt minor units +
+// currency code; quantities = BigInt minor units; no floats anywhere.
+// ---------------------------------------------------------------------------
+
+model Contact {
+  id                     String   @id @default(uuid(7))
+  tenantId               String
+  type                   String   @default("CUSTOMER") // CUSTOMER | SUPPLIER | BOTH
+  legalName              String
+  legalNameAr            String?
+  displayName            String
+  taxNumber              String? // Saudi VAT number: 15 digits when present
+  commercialRegistration String?
+  email                  String?
+  phone                  String?
+  street                 String?
+  city                   String?
+  postalCode             String?
+  country                String   @default("SA")
+  creditLimitMinor       BigInt   @default(0)
+  creditLimitCurrency    String   @default("SAR")
+  paymentTermsDays       Int      @default(0)
+  status                 String   @default("ACTIVE") // ACTIVE | INACTIVE
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String?
+
+  leads          Lead[]
+  opportunities  Opportunity[]
+  salesQuotes    SalesQuote[]
+  salesOrders    SalesOrder[]
+  salesInvoices  SalesInvoice[]
+  customerPayments CustomerPayment[]
+  purchaseOrders   PurchaseOrder[]
+  supplierInvoices SupplierInvoice[]
+  supplierPayments SupplierPayment[]
+  projects         Project[]
+
+  posSales PosSale[]
+  @@unique([taxNumber, tenantId])
+  @@unique([email, tenantId])
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+}
+
+model ItemCategory {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  code        String
+  name        String
+  nameAr      String?
+  description String?
+  parentId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  parent   ItemCategory?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children ItemCategory[] @relation("CategoryParent")
+  items    Item[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model Item {
+  id                    String   @id @default(uuid(7))
+  tenantId              String
+  sku                   String
+  name                  String
+  nameAr                String?
+  description           String?
+  categoryId            String?
+  defaultUomId          String
+  taxRateId             String?
+  barcode               String?
+  costingMethod         String   @default("FIFO") // FIFO | WEIGHTED_AVERAGE | STANDARD
+  standardCostMinor     BigInt   @default(0)
+  standardCostCurrency  String   @default("SAR")
+  salesPriceMinor       BigInt   @default(0)
+  salesPriceCurrency    String   @default("SAR")
+  purchasePriceMinor    BigInt   @default(0)
+  purchasePriceCurrency String   @default("SAR")
+  status                String   @default("ACTIVE") // ACTIVE | INACTIVE | DISCONTINUED
+  trackStock            Boolean  @default(true)
+  reorderPoint          BigInt   @default(0)
+  minStock              BigInt   @default(0)
+  maxStock              BigInt?
+  imageFileId           String? // optional link to a FileAsset id; no FK (no new file logic)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String?
+
+  category      ItemCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  defaultUom    UnitOfMeasure  @relation(fields: [defaultUomId], references: [id], onDelete: Restrict)
+  taxRate       TaxRate?       @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  priceListItems PriceListItem[]
+  quoteLines    QuoteLine[]
+  orderLines    OrderLine[]
+  salesInvoiceLines SalesInvoiceLine[]
+  purchaseOrderLines PurchaseOrderLine[]
+  supplierInvoiceLines SupplierInvoiceLine[]
+
+  stockLevels StockLevel[]
+  stockCostLayers StockCostLayer[]
+  stockMovements StockMovement[]
+  goodsReceiptLines GoodsReceiptLine[]
+  deliveryNoteLines DeliveryNoteLine[]
+  stockAdjustmentLines StockAdjustmentLine[]
+  stockTransferLines StockTransferLine[]
+  stockCountLines StockCountLine[]
+  posSaleLines PosSaleLine[]
+  bomsAsFinished Bom[] @relation("BomFinishedItem")
+  bomLinesAsComponent BomLine[] @relation("BomLineComponent")
+  workOrdersAsFinished WorkOrder[] @relation("WorkOrderFinishedItem")
+  workOrderLinesAsComponent WorkOrderLine[] @relation("WorkOrderLineComponent")
+  materialIssueLines MaterialIssueLine[] @relation("MaterialIssueLineItem")
+  scraps Scrap[] @relation("ScrapItem")
+  @@unique([sku, tenantId])
+  @@unique([barcode, tenantId])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model PriceList {
+  id        String    @id @default(uuid(7))
+  tenantId  String
+  name      String
+  nameAr    String?
+  currency  String    @default("SAR")
+  validFrom DateTime?
+  validTo   DateTime?
+  isDefault Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?
+
+  items PriceListItem[]
+
+  @@index([tenantId])
+  @@index([isDefault])
+}
+
+model PriceListItem {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  priceListId String
+  itemId      String
+  priceMinor  BigInt
+  minQuantity BigInt   @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, itemId, minQuantity])
+  @@index([tenantId])
+  @@index([priceListId])
+  @@index([itemId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Accounting (double-entry ledger)
+// Conventions as Phase 0/1: UUIDv7 ids; tenantId/createdAt/updatedAt/
+// createdBy + @@index([tenantId]) on every tenant table; money = BigInt
+// minor units + currency code; no floats anywhere. Status/type fields are
+// plain strings; validation lives in @eserp/shared Zod DTOs.
+//
+// Posting accounts: ChartOfAccounts has no isPosting flag — an account is
+// a posting account iff it is a LEAF (it has no children). Group/header
+// accounts (e.g. 1000 Cash and Cash Equivalents) cannot receive lines;
+// the API enforces this. See docs/erd-phase2.md.
+// ---------------------------------------------------------------------------
+
+model FiscalPeriod {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  fiscalYear   Int
+  periodNumber Int // 1..12
+  startDate    DateTime
+  endDate      DateTime
+  status       String   @default("OPEN") // OPEN | CLOSED | LOCKED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  journalEntries JournalEntry[]
+
+  @@unique([tenantId, fiscalYear, periodNumber])
+  @@index([tenantId])
+  @@index([fiscalYear])
+}
+
+model CostCenter {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  code      String
+  name      String
+  nameAr    String?
+  parentId  String?
+  status    String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  parent       CostCenter?       @relation("CostCenterParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children     CostCenter[]      @relation("CostCenterParent")
+  journalLines JournalEntryLine[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model OpeningBalance {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  accountId    String
+  fiscalYear   Int
+  debitMinor   BigInt   @default(0)
+  creditMinor  BigInt   @default(0)
+  currency     String   @default("SAR")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  account ChartOfAccounts @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, accountId, fiscalYear])
+  @@index([tenantId])
+  @@index([accountId])
+  @@index([fiscalYear])
+}
+
+model JournalEntry {
+  id               String    @id @default(uuid(7))
+  tenantId         String
+  number           String // from the JE numbering series, unique per tenant
+  entryDate        DateTime
+  fiscalPeriodId   String
+  status           String    @default("DRAFT") // DRAFT | POSTED | REVERSED
+  description      String
+  reference        String?
+  sourceModule     String    @default("MANUAL") // MANUAL | SALES | PURCHASING | INVENTORY | PAYROLL | OPENING | ADJUSTMENT | POS | MANUFACTURING
+  currency         String    @default("SAR") // single currency per entry (Phase 2)
+  totalDebitMinor  BigInt    @default(0)
+  totalCreditMinor BigInt    @default(0)
+  postedAt         DateTime?
+  postedBy         String?
+  reversesId       String? // the entry this entry reverses (null for originals)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdBy        String?
+
+  fiscalPeriod FiscalPeriod       @relation(fields: [fiscalPeriodId], references: [id], onDelete: Restrict)
+  reverses     JournalEntry?      @relation("JournalReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  reversedBy   JournalEntry?      @relation("JournalReversal")
+  lines        JournalEntryLine[]
+  salesInvoices SalesInvoice[]
+  customerPayments CustomerPayment[]
+  supplierInvoices SupplierInvoice[]
+  supplierPayments SupplierPayment[]
+
+  stockMovements StockMovement[]
+  goodsReceipts GoodsReceipt[]
+  deliveryNotes DeliveryNote[]
+  stockAdjustments StockAdjustment[]
+  stockCounts StockCount[]
+  posShifts PosShift[]
+  posSales PosSale[]
+  materialIssues MaterialIssue[]
+  productionReceipts ProductionReceipt[]
+  scraps Scrap[]
+  payrollRunAccruals PayrollRun[] @relation("PayrollRunAccrualEntry")
+  payrollRunPayments PayrollRun[] @relation("PayrollRunPaymentEntry")
+  @@unique([number, tenantId])
+  @@unique([reversesId])
+  @@index([tenantId])
+  @@index([fiscalPeriodId])
+  @@index([status])
+  @@index([entryDate])
+}
+
+model JournalEntryLine {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  entryId      String
+  accountId    String
+  debitMinor   BigInt   @default(0)
+  creditMinor  BigInt   @default(0)
+  currency     String   @default("SAR")
+  costCenterId String?
+  taxRateId    String?
+  description  String?
+  lineOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  entry      JournalEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account    ChartOfAccounts @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  costCenter CostCenter?     @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  taxRate    TaxRate?        @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([entryId])
+  @@index([accountId])
+  @@index([costCenterId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Sales / CRM (quote to cash)
+// Conventions as Phase 0/1/2: UUIDv7 ids; tenantId/createdAt/updatedAt/
+// createdBy + @@index([tenantId]) on every tenant table; money = BigInt
+// minor units + currency code; quantities = BigInt; no floats. Status/type
+// fields are plain strings; validation lives in @eserp/shared Zod DTOs.
+//
+// Line math (gross/discount/VAT/total, VAT = round_half_up(net * rateBps /
+// 10000)) is computed in @eserp/shared (sales.ts) and stored per line.
+// Quote expiry is computed on read (SENT + validTo past => EXPIRED);
+// no scheduler. SalesOrder.qtyFulfilled stays 0 in Phase 3 — Phase 5
+// Inventory drives fulfilment. SalesInvoice.type CREDIT_NOTE is a negative
+// invoice: its stored totals are negative and posting reverses the entries.
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id                   String    @id @default(uuid(7))
+  tenantId             String
+  name                 String
+  company              String?
+  email                String?
+  phone                String?
+  source               String    @default("WALK_IN") // WALK_IN | REFERRAL | WEBSITE | SOCIAL | OTHER
+  status               String    @default("NEW") // NEW | CONTACTED | QUALIFIED | LOST
+  notes                String?
+  expectedValueMinor   BigInt    @default(0)
+  expectedValueCurrency String   @default("SAR")
+  contactId            String? // customer Contact created on conversion
+  ownerId              String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String?
+
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([source])
+}
+
+model Opportunity {
+  id                    String    @id @default(uuid(7))
+  tenantId              String
+  customerId            String
+  leadId                String?
+  title                 String
+  stage                 String    @default("PROSPECTING") // PROSPECTING | QUALIFICATION | PROPOSAL | NEGOTIATION | WON | LOST
+  probability           Int       @default(0) // 0..100
+  expectedValueMinor    BigInt    @default(0)
+  expectedValueCurrency String    @default("SAR")
+  expectedCloseDate     DateTime?
+  ownerId               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdBy             String?
+
+  customer Contact @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  lead     Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([stage])
+}
+
+model SalesQuote {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  number          String // from the QUO numbering series, unique per tenant
+  customerId      String
+  validFrom       DateTime
+  validTo         DateTime
+  status          String   @default("DRAFT") // DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED (EXPIRED computed on read)
+  currency        String   @default("SAR")
+  subtotalMinor   BigInt   @default(0)
+  discountMinor   BigInt   @default(0)
+  taxMinor        BigInt   @default(0)
+  totalMinor      BigInt   @default(0)
+  salesOrderId    String? // order created on accept
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  customer   Contact     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder SalesOrder? @relation("QuoteOrder", fields: [salesOrderId], references: [id], onDelete: SetNull)
+  orders     SalesOrder[] @relation("OrderQuote")
+  lines      QuoteLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model QuoteLine {
+  id               String   @id @default(uuid(7))
+  tenantId         String
+  quoteId          String
+  itemId           String
+  quantity         BigInt
+  unitPriceMinor   BigInt   @default(0)
+  discountPct      Int      @default(0)
+  taxRateBps       Int      @default(1500)
+  lineSubtotalMinor BigInt  @default(0) // net (gross - discount)
+  lineDiscountMinor BigInt  @default(0)
+  lineTaxMinor     BigInt   @default(0)
+  lineTotalMinor   BigInt   @default(0)
+  lineOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  quote SalesQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  item  Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([quoteId])
+  @@index([itemId])
+}
+
+model SalesOrder {
+  id            String   @id @default(uuid(7))
+  tenantId      String
+  number        String // from the SO numbering series, unique per tenant
+  customerId    String
+  quoteId       String?
+  status        String   @default("DRAFT") // DRAFT | CONFIRMED | PARTIALLY_FULFILLED | FULFILLED | CANCELLED
+  currency      String   @default("SAR")
+  subtotalMinor BigInt   @default(0)
+  discountMinor BigInt   @default(0)
+  taxMinor      BigInt   @default(0)
+  totalMinor    BigInt   @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+
+  customer       Contact        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  quote          SalesQuote?    @relation("OrderQuote", fields: [quoteId], references: [id], onDelete: SetNull)
+  quotedBy       SalesQuote[]   @relation("QuoteOrder")
+  lines          OrderLine[]
+  salesInvoices  SalesInvoice[]
+
+  deliveryNotes DeliveryNote[]
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model OrderLine {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  orderId           String
+  itemId            String
+  quantityOrdered   BigInt
+  quantityFulfilled BigInt   @default(0) // stays 0 in Phase 3; Phase 5 drives it
+  unitPriceMinor    BigInt   @default(0)
+  discountPct       Int      @default(0)
+  taxRateBps        Int      @default(1500)
+  lineSubtotalMinor BigInt   @default(0)
+  lineDiscountMinor BigInt   @default(0)
+  lineTaxMinor      BigInt   @default(0)
+  lineTotalMinor    BigInt   @default(0)
+  lineOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  order SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  deliveryNoteLines DeliveryNoteLine[]
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([itemId])
+}
+
+model SalesInvoice {
+  id              String    @id @default(uuid(7))
+  tenantId        String
+  number          String // from the INV numbering series, unique per tenant
+  type            String    @default("INVOICE") // INVOICE | CREDIT_NOTE (negative invoice)
+  customerId      String
+  orderId         String?
+  projectId       String? // Phase 9: optional project link (milestone billing / T&M revenue)
+  status          String    @default("DRAFT") // DRAFT | POSTED | PARTIALLY_PAID | PAID | VOID
+  currency        String    @default("SAR")
+  invoiceDate     DateTime
+  dueDate         DateTime
+  subtotalMinor   BigInt    @default(0)
+  discountMinor   BigInt    @default(0)
+  taxMinor        BigInt    @default(0)
+  totalMinor      BigInt    @default(0)
+  paidMinor       BigInt    @default(0)
+  journalEntryId  String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  customer      Contact                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  order         SalesOrder?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  project       Project?                  @relation("ProjectInvoices", fields: [projectId], references: [id], onDelete: SetNull)
+  milestone     Milestone?                @relation("MilestoneInvoice")
+  journalEntry  JournalEntry?             @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines         SalesInvoiceLine[]
+  allocations   CustomerPaymentAllocation[]
+  zatcaDocuments ZatcaDocument[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([projectId])
+  @@index([status])
+  @@index([invoiceDate])
+}
+
+model SalesInvoiceLine {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  invoiceId         String
+  itemId            String? // nullable in Phase 9: milestone/service lines have no stock item
+  description       String? // free-text line label (used by milestone invoices)
+  quantity          BigInt
+  unitPriceMinor    BigInt   @default(0)
+  discountPct       Int      @default(0)
+  taxRateBps        Int      @default(1500)
+  lineSubtotalMinor BigInt   @default(0)
+  lineDiscountMinor BigInt   @default(0)
+  lineTaxMinor      BigInt   @default(0)
+  lineTotalMinor    BigInt   @default(0)
+  lineOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  invoice SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item    Item?        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([itemId])
+}
+
+model CustomerPayment {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  number         String // from the PAY numbering series, unique per tenant
+  customerId     String
+  method         String   @default("BANK_TRANSFER") // CASH | BANK_TRANSFER | CARD | CHEQUE
+  reference      String?
+  paymentDate    DateTime
+  currency       String   @default("SAR")
+  amountMinor    BigInt   @default(0)
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  customer     Contact                     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?               @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  allocations  CustomerPaymentAllocation[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([paymentDate])
+}
+
+model CustomerPaymentAllocation {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  paymentId   String
+  invoiceId   String
+  amountMinor BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  payment CustomerPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice SalesInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([paymentId])
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Purchasing (requisition to pay; goods receipt is Phase 5)
+// Conventions as Phase 3: UUIDv7 ids; tenantId/createdAt/updatedAt/
+// createdBy + @@index([tenantId]); money = BigInt minor units + currency;
+// quantities = BigInt; no floats. Status/type fields are plain strings;
+// validation lives in @eserp/shared Zod DTOs.
+//
+// A purchase order posts NOTHING to the ledger (commitment only).
+// PurchaseOrderLine.quantityReceived stays 0 in Phase 4 — Phase 5 drives
+// it via goods receipt. SupplierInvoice posting runs the 3-way match when
+// linked to a PO: invoiced qty (incl. already-invoiced) must not exceed the
+// PO ordered qty, and unit-price variance over 5% blocks posting.
+// ---------------------------------------------------------------------------
+
+model PurchaseOrder {
+  id            String   @id @default(uuid(7))
+  tenantId      String
+  number        String // from the PO numbering series, unique per tenant
+  supplierId    String
+  status        String   @default("DRAFT") // DRAFT | SENT | CONFIRMED | PARTIALLY_RECEIVED | RECEIVED | CLOSED | CANCELLED
+  currency      String   @default("SAR")
+  expectedDate  DateTime?
+  subtotalMinor BigInt   @default(0)
+  discountMinor BigInt   @default(0)
+  taxMinor      BigInt   @default(0)
+  totalMinor    BigInt   @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+
+  supplier         Contact           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines            PurchaseOrderLine[]
+  supplierInvoices SupplierInvoice[]
+
+  goodsReceipts GoodsReceipt[]
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseOrderLine {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  purchaseOrderId   String
+  itemId            String
+  quantityOrdered   BigInt
+  quantityReceived  BigInt   @default(0) // stays 0 in Phase 4; Phase 5 drives it
+  unitCostMinor     BigInt   @default(0)
+  discountPct       Int      @default(0)
+  taxRateBps        Int      @default(1500)
+  lineSubtotalMinor BigInt   @default(0)
+  lineDiscountMinor BigInt   @default(0)
+  lineTaxMinor      BigInt   @default(0)
+  lineTotalMinor    BigInt   @default(0)
+  lineOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  purchaseOrder      PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item               Item                 @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  supplierInvoiceLines SupplierInvoiceLine[]
+
+  goodsReceiptLines GoodsReceiptLine[]
+  @@index([tenantId])
+  @@index([purchaseOrderId])
+  @@index([itemId])
+}
+
+model SupplierInvoice {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  number         String // from the SIN numbering series, unique per tenant
+  supplierId     String
+  purchaseOrderId String?
+  status         String    @default("DRAFT") // DRAFT | POSTED | PARTIALLY_PAID | PAID | VOID
+  currency       String    @default("SAR")
+  invoiceDate    DateTime
+  dueDate        DateTime
+  subtotalMinor  BigInt    @default(0)
+  discountMinor  BigInt    @default(0)
+  taxMinor       BigInt    @default(0)
+  totalMinor     BigInt    @default(0)
+  paidMinor      BigInt    @default(0)
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  supplier     Contact                     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder?             @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  journalEntry JournalEntry?               @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        SupplierInvoiceLine[]
+  allocations  SupplierPaymentAllocation[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([invoiceDate])
+}
+
+model SupplierInvoiceLine {
+  id                  String   @id @default(uuid(7))
+  tenantId            String
+  supplierInvoiceId   String
+  purchaseOrderLineId String?
+  itemId              String
+  quantity            BigInt
+  unitCostMinor       BigInt   @default(0)
+  discountPct         Int      @default(0)
+  taxRateBps          Int      @default(1500)
+  lineSubtotalMinor   BigInt   @default(0)
+  lineDiscountMinor   BigInt   @default(0)
+  lineTaxMinor        BigInt   @default(0)
+  lineTotalMinor      BigInt   @default(0)
+  lineOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String?
+
+  supplierInvoice   SupplierInvoice   @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id], onDelete: SetNull)
+  item              Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([supplierInvoiceId])
+  @@index([itemId])
+}
+
+model SupplierPayment {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  number         String // from the SPAY numbering series, unique per tenant
+  supplierId     String
+  method         String   @default("BANK_TRANSFER") // CASH | BANK_TRANSFER | CARD | CHEQUE
+  reference      String?
+  paymentDate    DateTime
+  currency       String   @default("SAR")
+  amountMinor    BigInt   @default(0)
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  supplier     Contact                     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?               @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  allocations  SupplierPaymentAllocation[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([paymentDate])
+}
+
+model SupplierPaymentAllocation {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  paymentId   String
+  invoiceId   String
+  amountMinor BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  payment SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice SupplierInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([paymentId])
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Inventory (stock, valuation, movements)
+// Conventions as Phase 0–4: UUIDv7 ids; tenantId/createdAt/updatedAt/
+// createdBy + @@index([tenantId]); money = BigInt minor units + currency;
+// quantities = BigInt; no floats. Status/type fields are plain strings;
+// validation lives in @eserp/shared Zod DTOs.
+//
+// Valuation (see docs/erd-phase5.md): FIFO consumes StockCostLayer rows
+// oldest-first; WEIGHTED_AVERAGE recomputes StockLevel.averageCostMinor on
+// each receipt; STANDARD issues at Item.standardCostMinor. StockMovement is
+// append-only — corrections are new reversing movements. Reservations live
+// on StockLevel.qtyReserved (confirmed sales orders reserve, delivery and
+// cancellation release).
+// ---------------------------------------------------------------------------
+
+model StockLevel {
+  id               String   @id @default(uuid(7))
+  tenantId         String
+  warehouseId      String
+  itemId           String
+  qtyOnHand        BigInt   @default(0)
+  qtyReserved      BigInt   @default(0)
+  averageCostMinor BigInt   @default(0)
+  lastCostMinor    BigInt   @default(0)
+  currency         String   @default("SAR")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([warehouseId, itemId, tenantId])
+  @@index([tenantId])
+  @@index([warehouseId])
+  @@index([itemId])
+}
+
+model StockCostLayer {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  warehouseId       String
+  itemId            String
+  sourceType        String // GOODS_RECEIPT | ADJUSTMENT | COUNT | TRANSFER | POS_SALE (reversal)
+  sourceId          String? // goods receipt / adjustment / transfer line id
+  quantityRemaining BigInt   @default(0)
+  unitCostMinor     BigInt   @default(0)
+  currency          String   @default("SAR")
+  receivedAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([warehouseId, itemId, receivedAt])
+  @@index([itemId])
+}
+
+model StockMovement {
+  id                    String   @id @default(uuid(7))
+  tenantId              String
+  type                  String // IN | OUT | TRANSFER | ADJUSTMENT | RETURN_IN | RETURN_OUT
+  itemId                String
+  warehouseId           String
+  destinationWarehouseId String?
+  quantity              BigInt // always positive; direction is implied by type
+  unitCostMinor         BigInt   @default(0)
+  totalCostMinor        BigInt   @default(0)
+  currency              String   @default("SAR")
+  sourceType            String // GOODS_RECEIPT | DELIVERY_NOTE | POS_SALE | ADJUSTMENT | COUNT | TRANSFER
+  sourceId              String?
+  reference             String?
+  movementDate          DateTime @default(now())
+  journalEntryId        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String?
+
+  item                 Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse            Warehouse  @relation("MovementWarehouse", fields: [warehouseId], references: [id], onDelete: Restrict)
+  destinationWarehouse Warehouse? @relation("MovementDestination", fields: [destinationWarehouseId], references: [id], onDelete: Restrict)
+  journalEntry         JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([sourceType, sourceId])
+  @@index([movementDate])
+}
+
+model GoodsReceipt {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  number         String // from the GRN numbering series, unique per tenant
+  purchaseOrderId String
+  warehouseId    String
+  status         String    @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  receiptDate    DateTime
+  currency       String    @default("SAR")
+  subtotalMinor  BigInt    @default(0) // net cost excl. VAT
+  totalCostMinor BigInt    @default(0)
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines         GoodsReceiptLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([purchaseOrderId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model GoodsReceiptLine {
+  id                  String   @id @default(uuid(7))
+  tenantId            String
+  goodsReceiptId      String
+  purchaseOrderLineId String
+  itemId              String
+  quantityReceived    BigInt
+  unitCostMinor       BigInt   @default(0)
+  lineTotalMinor      BigInt   @default(0)
+  lineOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String?
+
+  goodsReceipt      GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLine PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  item              Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderLineId])
+  @@index([itemId])
+}
+
+model DeliveryNote {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  number         String // from the DN numbering series, unique per tenant
+  salesOrderId   String
+  warehouseId    String
+  status         String    @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  deliveryDate   DateTime
+  currency       String    @default("SAR")
+  totalCostMinor BigInt    @default(0) // COGS at valuation cost
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  salesOrder   SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        DeliveryNoteLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([salesOrderId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model DeliveryNoteLine {
+  id               String   @id @default(uuid(7))
+  tenantId         String
+  deliveryNoteId   String
+  salesOrderLineId String
+  itemId           String
+  quantity         BigInt
+  unitCostMinor    BigInt   @default(0) // valuation cost at issue time
+  lineTotalMinor   BigInt   @default(0)
+  lineOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  deliveryNote   DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  salesOrderLine OrderLine    @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  item           Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([deliveryNoteId])
+  @@index([salesOrderLineId])
+  @@index([itemId])
+}
+
+model StockAdjustment {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  number         String // from the ADJ numbering series, unique per tenant
+  warehouseId    String
+  status         String    @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  adjustmentDate DateTime
+  currency       String    @default("SAR")
+  totalValueMinor BigInt   @default(0) // signed net value of the lines
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        StockAdjustmentLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model StockAdjustmentLine {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  stockAdjustmentId String
+  itemId            String
+  quantityDelta     BigInt // signed: + found, - damage/theft
+  unitCostMinor     BigInt   @default(0)
+  lineTotalMinor    BigInt   @default(0) // signed value (delta x unit cost)
+  reason            String   @default("CORRECTION") // DAMAGE | THEFT | FOUND | CORRECTION | OTHER
+  lineOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  stockAdjustment StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([stockAdjustmentId])
+  @@index([itemId])
+}
+
+model StockTransfer {
+  id              String    @id @default(uuid(7))
+  tenantId        String
+  number          String // from the TRF numbering series, unique per tenant
+  fromWarehouseId String
+  toWarehouseId   String
+  status          String    @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  transferDate    DateTime
+  currency        String    @default("SAR")
+  totalCostMinor  BigInt    @default(0)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  fromWarehouse Warehouse          @relation("TransferFrom", fields: [fromWarehouseId], references: [id], onDelete: Restrict)
+  toWarehouse   Warehouse          @relation("TransferTo", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+  lines         StockTransferLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+}
+
+model StockTransferLine {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  stockTransferId String
+  itemId          String
+  quantity        BigInt
+  unitCostMinor   BigInt   @default(0) // valuation cost at the source warehouse
+  lineTotalMinor  BigInt   @default(0)
+  lineOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  stockTransfer StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([stockTransferId])
+  @@index([itemId])
+}
+
+model StockCount {
+  id          String    @id @default(uuid(7))
+  tenantId    String
+  number      String // from the CNT numbering series, unique per tenant
+  warehouseId String
+  status      String    @default("DRAFT") // DRAFT | APPROVED | CANCELLED
+  countDate   DateTime
+  currency    String    @default("SAR")
+  journalEntryId String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        StockCountLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model StockCountLine {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  stockCountId    String
+  itemId          String
+  systemQuantity  BigInt   @default(0) // on-hand at count creation
+  countedQuantity BigInt
+  varianceQuantity BigInt  @default(0) // counted - system
+  unitCostMinor   BigInt   @default(0)
+  lineOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  stockCount StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  item       Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([stockCountId])
+  @@index([itemId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — POS (online-first counter sales)
+// Conventions as Phase 0–5. One combined journal entry per sale
+// (Dr Cash/Card + Dr COGS / Cr Sales Revenue + Cr Output VAT + Cr Inventory).
+// Voiding a sale restores stock and posts a reversing entry. A shift close
+// posts any cash variance to 5250 Cash Over / Short (short: Dr 5250 / Cr
+// Cash; over: Dr Cash / Cr 5250 — one netting account, standard practice).
+// POS is online-first:
+// no offline queue/sync, no printer/drawer drivers (receipt is HTML/JSON).
+// ---------------------------------------------------------------------------
+
+model PosTerminal {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  code            String // unique per tenant, e.g. POS-RIY-01
+  name            String
+  branchId        String
+  warehouseId     String // sales draw stock from this warehouse
+  status          String   @default("ACTIVE") // ACTIVE | INACTIVE
+  cashAccountCode String   @default("1010")
+  cardAccountCode String   @default("1030")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  shifts    PosShift[]
+  sales     PosSale[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model PosShift {
+  id                  String    @id @default(uuid(7))
+  tenantId            String
+  terminalId          String
+  cashierId           String // User id (no FK — users are tenant-scoped)
+  openedAt            DateTime  @default(now())
+  openingFloatMinor   BigInt    @default(0)
+  status              String    @default("OPEN") // OPEN | CLOSED
+  closedAt            DateTime?
+  expectedCashMinor   BigInt    @default(0)
+  expectedCardMinor   BigInt    @default(0)
+  countedCashMinor    BigInt?
+  varianceMinor       BigInt    @default(0) // counted - expected cash
+  closedBy            String?
+  journalEntryId      String? // variance entry, when a variance was posted
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String?
+
+  terminal     PosTerminal  @relation(fields: [terminalId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  sales        PosSale[]
+
+  @@index([tenantId])
+  @@index([terminalId])
+  @@index([status])
+  @@index([cashierId])
+}
+
+model PosSale {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  number         String // from the POS numbering series, unique per tenant
+  terminalId     String
+  shiftId        String
+  cashierId      String
+  customerId     String?
+  status         String    @default("COMPLETED") // COMPLETED | VOIDED
+  saleDate       DateTime  @default(now())
+  currency       String    @default("SAR")
+  subtotalMinor  BigInt    @default(0)
+  discountMinor  BigInt    @default(0)
+  taxMinor       BigInt    @default(0)
+  totalMinor     BigInt    @default(0)
+  cashMinor      BigInt    @default(0)
+  cardMinor      BigInt    @default(0)
+  cogsMinor      BigInt    @default(0)
+  journalEntryId String?
+  voidedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  terminal     PosTerminal  @relation(fields: [terminalId], references: [id], onDelete: Restrict)
+  shift        PosShift     @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  customer     Contact?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        PosSaleLine[]
+  payments     PosSalePayment[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([terminalId])
+  @@index([shiftId])
+  @@index([status])
+  @@index([saleDate])
+}
+
+model PosSaleLine {
+  id                String   @id @default(uuid(7))
+  tenantId          String
+  posSaleId         String
+  itemId            String
+  quantity          BigInt
+  unitPriceMinor    BigInt   @default(0)
+  discountPct       Int      @default(0)
+  taxRateBps        Int      @default(1500)
+  unitCostMinor     BigInt   @default(0) // valuation cost at sale time
+  lineSubtotalMinor BigInt   @default(0)
+  lineDiscountMinor BigInt   @default(0)
+  lineTaxMinor      BigInt   @default(0)
+  lineTotalMinor    BigInt   @default(0)
+  lineOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  posSale PosSale @relation(fields: [posSaleId], references: [id], onDelete: Cascade)
+  item    Item    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([posSaleId])
+  @@index([itemId])
+}
+
+model PosSalePayment {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  posSaleId   String
+  method      String // CASH | CARD
+  amountMinor BigInt   @default(0)
+  reference   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  posSale PosSale @relation(fields: [posSaleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([posSaleId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Manufacturing (BOMs, work orders, WIP costing).
+// See docs/erd-phase7.md. Labour cost posting is deferred to Phase 8
+// integration: Phase 7 posts material + overhead only (labour hours are
+// recorded on WorkOrderOperation; labour cost via payroll in Phase 8).
+// ---------------------------------------------------------------------------
+
+model WorkCenter {
+  id                    String   @id @default(uuid(7))
+  tenantId              String
+  code                  String // unique per tenant, e.g. WC-PACK-01
+  name                  String
+  nameAr                String?
+  standardCostRateMinor BigInt   @default(0) // standard hourly cost rate, minor units/hour
+  status                String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String?
+
+  bomLines           BomLine[]
+  workOrderLines     WorkOrderLine[]
+  workOrderOperations WorkOrderOperation[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Bom {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  finishedItemId String
+  version        Int      @default(1)
+  status         String   @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED (one ACTIVE per finished item)
+  name           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  finishedItem Item      @relation("BomFinishedItem", fields: [finishedItemId], references: [id], onDelete: Restrict)
+  lines        BomLine[]
+  workOrders   WorkOrder[]
+
+  @@unique([finishedItemId, version, tenantId])
+  @@index([tenantId])
+  @@index([finishedItemId])
+  @@index([status])
+}
+
+model BomLine {
+  id               String   @id @default(uuid(7))
+  tenantId         String
+  bomId            String
+  componentItemId  String
+  quantityPerUnit  BigInt // integer units per finished unit
+  scrapBps         Int      @default(0) // scrap allowance, basis points (500 = 5%)
+  workCenterId     String?
+  operationName    String?
+  lineOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?
+
+  bom           Bom         @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  componentItem Item        @relation("BomLineComponent", fields: [componentItemId], references: [id], onDelete: Restrict)
+  workCenter    WorkCenter? @relation(fields: [workCenterId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([bomId])
+  @@index([componentItemId])
+}
+
+model WorkOrder {
+  id                     String   @id @default(uuid(7))
+  tenantId               String
+  number                 String // from the WO numbering series, unique per tenant
+  finishedItemId         String
+  bomId                  String
+  bomVersion             Int // snapshot: the BOM version released against
+  warehouseId            String
+  status                 String   @default("DRAFT") // DRAFT | RELEASED | IN_PROGRESS | COMPLETED | CANCELLED
+  qtyPlanned             BigInt
+  qtyProduced            BigInt   @default(0)
+  qtyScrapped            BigInt   @default(0) // finished units scrapped
+  plannedStartDate       DateTime?
+  dueDate                DateTime?
+  currency               String   @default("SAR")
+  materialCostPlannedMinor BigInt @default(0) // BOM roll-up x qtyPlanned at release
+  materialCostActualMinor  BigInt @default(0) // valuation cost of material issued
+  unitCostMinor          BigInt   @default(0) // computed unit cost at first receipt
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String?
+
+  finishedItem       Item                 @relation("WorkOrderFinishedItem", fields: [finishedItemId], references: [id], onDelete: Restrict)
+  bom                Bom                  @relation(fields: [bomId], references: [id], onDelete: Restrict)
+  warehouse          Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  lines              WorkOrderLine[]
+  operations         WorkOrderOperation[]
+  materialIssues     MaterialIssue[]
+  productionReceipts ProductionReceipt[]
+  scraps             Scrap[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([finishedItemId])
+  @@index([bomId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model WorkOrderLine {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  workOrderId     String
+  componentItemId String
+  quantityPerUnit BigInt // snapshot of the BOM line at release
+  scrapBps        Int      @default(0)
+  workCenterId    String?
+  operationName   String?
+  qtyRequired     BigInt // qtyPlanned x per-unit x (1 + scrap), at release
+  qtyIssued       BigInt   @default(0)
+  unitCostMinor   BigInt   @default(0) // last valuation unit cost issued
+  lineOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  workOrder     WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  componentItem Item        @relation("WorkOrderLineComponent", fields: [componentItemId], references: [id], onDelete: Restrict)
+  workCenter    WorkCenter? @relation(fields: [workCenterId], references: [id], onDelete: SetNull)
+  issueLines    MaterialIssueLine[]
+
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([componentItemId])
+}
+
+model WorkOrderOperation {
+  id           String   @id @default(uuid(7))
+  tenantId     String
+  workOrderId  String
+  name         String
+  workCenterId String?
+  plannedHours Int      @default(0)
+  actualHours  Int      @default(0)
+  status       String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+
+  workOrder  WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCenter WorkCenter? @relation(fields: [workCenterId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([workCenterId])
+}
+
+model MaterialIssue {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  number         String // from the MI numbering series, unique per tenant
+  workOrderId    String
+  warehouseId    String
+  status         String   @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  issueDate      DateTime @default(now())
+  currency       String   @default("SAR")
+  totalCostMinor BigInt   @default(0) // valuation cost of the issued components
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  workOrder    WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  lines        MaterialIssueLine[]
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model MaterialIssueLine {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  materialIssueId String
+  workOrderLineId String
+  itemId          String
+  quantity        BigInt
+  unitCostMinor   BigInt   @default(0) // valuation unit cost at issue time
+  lineTotalMinor  BigInt   @default(0)
+  lineOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  materialIssue MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
+  workOrderLine WorkOrderLine @relation(fields: [workOrderLineId], references: [id], onDelete: Restrict)
+  item          Item          @relation("MaterialIssueLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([materialIssueId])
+  @@index([workOrderLineId])
+  @@index([itemId])
+}
+
+model ProductionReceipt {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  number         String // from the PR numbering series, unique per tenant
+  workOrderId    String
+  warehouseId    String
+  status         String   @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  receiptDate    DateTime @default(now())
+  quantity       BigInt
+  unitCostMinor  BigInt   @default(0) // computed WIP unit cost at receipt time
+  totalCostMinor BigInt   @default(0)
+  overProduced   Boolean  @default(false) // receipt pushes produced qty beyond planned
+  currency       String   @default("SAR")
+  journalEntryId String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  workOrder    WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model Scrap {
+  id             String   @id @default(uuid(7))
+  tenantId       String
+  number         String // from the SCR numbering series, unique per tenant
+  workOrderId    String? // nullable: component scrap from stock need not belong to an order
+  kind           String // COMPONENT | FINISHED
+  itemId         String
+  warehouseId    String
+  quantity       BigInt
+  unitCostMinor  BigInt   @default(0)
+  totalCostMinor BigInt   @default(0)
+  reason         String
+  scrapDate      DateTime @default(now())
+  status         String   @default("DRAFT") // DRAFT | POSTED | CANCELLED
+  currency       String   @default("SAR")
+  journalEntryId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
+
+  workOrder    WorkOrder?    @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  item         Item          @relation("ScrapItem", fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([number, tenantId])
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — HR / Payroll (Saudi rules). See docs/erd-phase8.md.
+// National ID / Iqama is stored as a plain string in Phase 8; field
+// encryption is a Phase 11 hardening item. Leave balances are computed on
+// read (entitlement − approved days taken), not stored.
+// ---------------------------------------------------------------------------
+
+model Department {
+  id        String   @id @default(uuid(7))
+  tenantId  String
+  code      String // unique per tenant, e.g. HR, OPS
+  name      String
+  nameAr    String?
+  parentId  String?
+  managerId String? // Employee id (optional)
+  status    String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  parent   Department?  @relation("DepartmentParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children Department[] @relation("DepartmentParent")
+  manager  Employee?    @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: SetNull)
+  employees Employee[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([parentId])
+  @@index([managerId])
+  @@index([status])
+}
+
+model Employee {
+  id                      String    @id @default(uuid(7))
+  tenantId                String
+  code                    String // unique per tenant, e.g. EMP-001
+  name                    String
+  nameAr                  String?
+  nationalId              String? // National ID / Iqama number (plain string in Phase 8)
+  jobTitle                String
+  departmentId            String
+  branchId                String?
+  hireDate                DateTime
+  endDate                 DateTime? // set on termination
+  status                  String    @default("ACTIVE") // ACTIVE | ON_LEAVE | TERMINATED
+  basicSalaryMinor        BigInt    @default(0) // monthly, minor units
+  housingAllowanceMinor   BigInt    @default(0)
+  transportAllowanceMinor BigInt    @default(0)
+  otherAllowanceMinor     BigInt    @default(0)
+  currency                String    @default("SAR")
+  bankName                String?
+  iban                    String?
+  gosiNumber              String?
+  nationality             String    @default("SAUDI") // SAUDI | NON_SAUDI (drives GOSI rates)
+  dependentsCount         Int       @default(0)
+  userId                  String?   @unique // optional link to a login User (e.g. the HR user)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  createdBy               String?
+
+  department        Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  branch            Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  managesDepartments Department[]      @relation("DepartmentManager")
+  leaveRequests     LeaveRequest[]
+  attendanceRecords AttendanceRecord[]
+  payrollLines      PayrollLine[]
+  projectTasks      ProjectTask[]      @relation("TaskAssignee")
+  timesheets        Timesheet[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([status])
+  @@index([nationality])
+}
+
+model LeaveType {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  code        String // unique per tenant, e.g. ANNUAL, SICK
+  name        String
+  nameAr      String?
+  daysPerYear Int
+  paid        Boolean  @default(true)
+  status      String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  leaveRequests LeaveRequest[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model LeaveRequest {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  employeeId  String
+  leaveTypeId String
+  startDate   DateTime
+  endDate     DateTime
+  days        Int      @default(0) // computed working days (Fri–Sat weekend excluded)
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  approverId  String? // User id of the approver (no FK)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model AttendanceRecord {
+  id         String   @id @default(uuid(7))
+  tenantId   String
+  employeeId String
+  date       DateTime // calendar day (UTC midnight)
+  checkIn    String? // HH:mm
+  checkOut   String? // HH:mm
+  status     String   @default("PRESENT") // PRESENT | ABSENT | LATE | ON_LEAVE | HOLIDAY
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, date, tenantId])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
+}
+
+model PayrollRun {
+  id                     String    @id @default(uuid(7))
+  tenantId               String
+  periodYear             Int
+  periodMonth            Int // 1..12
+  status                 String    @default("DRAFT") // DRAFT | CALCULATED | APPROVED | PAID
+  currency               String    @default("SAR")
+  grossMinor             BigInt    @default(0)
+  deductionsMinor        BigInt    @default(0) // GOSI employee + other deductions
+  netMinor               BigInt    @default(0)
+  gosiEmployerMinor      BigInt    @default(0)
+  eosbMinor              BigInt    @default(0)
+  journalEntryId         String? // accrual entry (posted on pay)
+  paymentJournalEntryId  String? // bank payment entry (posted on pay)
+  bankAccountCode        String? // e.g. 1020
+  paymentDate            DateTime?
+  paidAt                 DateTime?
+  notes                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  createdBy              String?
+
+  journalEntry        JournalEntry? @relation("PayrollRunAccrualEntry", fields: [journalEntryId], references: [id], onDelete: SetNull)
+  paymentJournalEntry JournalEntry? @relation("PayrollRunPaymentEntry", fields: [paymentJournalEntryId], references: [id], onDelete: SetNull)
+  lines               PayrollLine[]
+
+  @@unique([periodYear, periodMonth, tenantId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([periodYear, periodMonth])
+}
+
+model PayrollLine {
+  id                    String   @id @default(uuid(7))
+  tenantId              String
+  payrollRunId          String
+  employeeId            String
+  basicSalaryMinor      BigInt   @default(0)
+  allowancesMinor       BigInt   @default(0) // housing + transport + other
+  overtimeMinor         BigInt   @default(0)
+  grossMinor            BigInt   @default(0)
+  gosiEmployeeMinor     BigInt   @default(0)
+  otherDeductionsMinor  BigInt   @default(0)
+  netMinor              BigInt   @default(0)
+  gosiEmployerMinor     BigInt   @default(0)
+  eosbAccrualMinor      BigInt   @default(0)
+  absentDays            Int      @default(0)
+  workingDays           Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String?
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([payrollRunId, employeeId, tenantId])
+  @@index([tenantId])
+  @@index([payrollRunId])
+  @@index([employeeId])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — Projects (delivery, time, cost, billing)
+// Conventions as Phase 0–8: UUIDv7 ids; tenantId/createdAt/updatedAt/
+// createdBy + @@index([tenantId]); money = BigInt minor units + currency;
+// hours on Timesheet are stored as integer MINUTES (minutesInt); the API
+// accepts decimal hours and converts (see @eserp/shared projects.ts).
+// Status/type fields are plain strings; validation lives in @eserp/shared
+// Zod DTOs. COMPLETED projects lock time/expense entry (enforced in the
+// service); APPROVED timesheets are immutable. Milestone invoices are
+// DRAFT SalesInvoices linked by projectId, with a service line
+// (SalesInvoiceLine.itemId null, description set, tax 0 — see
+// docs/erd-phase9.md).
+//
+// Phase 10 — Analytics / AI
+// Only one new table: ReportSnapshot. KPIs/statements are computed from
+// existing ledger + document tables (no new fact tables).
+
+model Project {
+  id           String    @id @default(uuid(7))
+  tenantId     String
+  code         String // unique per tenant, e.g. PRJ-001
+  name         String
+  nameAr       String?
+  customerId   String?
+  managerId    String? // User id (login user), no FK to keep User lean — validated in service
+  status       String    @default("PLANNING") // PLANNING | ACTIVE | ON_HOLD | COMPLETED | CANCELLED
+  startDate    DateTime?
+  dueDate      DateTime?
+  budgetMinor  BigInt    @default(0)
+  currency     String    @default("SAR")
+  billingType  String    @default("FIXED_PRICE") // FIXED_PRICE | TIME_AND_MATERIALS | MILESTONE
+  description  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdBy    String?
+
+  customer   Contact?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  manager    User?             @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+  tasks      ProjectTask[]
+  timesheets Timesheet[]
+  expenses   ProjectExpense[]
+  milestones Milestone[]
+  invoices   SalesInvoice[]    @relation("ProjectInvoices")
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([managerId])
+  @@index([status])
+  @@index([billingType])
+}
+
+model ProjectTask {
+  id              String   @id @default(uuid(7))
+  tenantId        String
+  projectId       String
+  title           String
+  assigneeId      String? // Employee id (assignee is an Employee — see docs/erd-phase9.md)
+  status          String   @default("TODO") // TODO | IN_PROGRESS | DONE | BLOCKED
+  dueDate         DateTime?
+  estimatedMinutes Int? // estimate in minutes (DTO accepts decimal hours); actual hours are computed from approved timesheets
+  hourlyRateMinor BigInt? // optional per-task labour cost-rate override (minor units/hour)
+  priority        String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  Employee?  @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  timesheets Timesheet[]
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+}
+
+model Timesheet {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  employeeId  String
+  projectId   String
+  taskId      String?
+  date        DateTime // calendar day (UTC midnight)
+  minutesInt  Int // hours stored as integer minutes (7.5h = 450)
+  billable    Boolean  @default(true)
+  description String?
+  status      String   @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  approverId  String? // User id of the approver (no FK)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  employee Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task     ProjectTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, projectId, taskId, date, tenantId])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([date])
+  @@index([status])
+}
+
+model ProjectExpense {
+  id            String   @id @default(uuid(7))
+  tenantId      String
+  projectId     String
+  date          DateTime
+  category      String   @default("OTHER") // TRAVEL | MATERIALS | SERVICES | OTHER
+  amountMinor   BigInt   @default(0)
+  currency      String   @default("SAR")
+  description   String?
+  receiptFileId String? // FileAsset id as a plain string (same pattern as Phase 1 item images)
+  status        String   @default("DRAFT") // DRAFT | APPROVED | REJECTED
+  submittedBy   String? // User id (no FK)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([date])
+  @@index([status])
+  @@index([category])
+}
+
+model Milestone {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  projectId   String
+  title       String
+  dueDate     DateTime?
+  amountMinor BigInt   @default(0)
+  status      String   @default("PENDING") // PENDING | ACHIEVED | INVOICED
+  invoiceId   String?  @unique // SalesInvoice id when billed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoice SalesInvoice? @relation("MilestoneInvoice", fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model ReportSnapshot {
+  id          String   @id @default(uuid(7))
+  tenantId    String
+  type        String // PROFIT_LOSS | BALANCE_SHEET | CASH_FLOW | AR_AGING | AP_AGING | STOCK_VALUATION | SALES_BY_ITEM | SALES_BY_CUSTOMER
+  parameters  Json     @default("{}") // e.g. { fiscalPeriodId, asOf, from, to }
+  format      String   @default("CSV") // CSV | JSON
+  content     Json? // inline JSON payload (the generated report, re-downloadable)
+  fileAssetId String? // FileAsset id when the CSV is stored as a file (plain string)
+  generatedBy String? // User id (no FK)
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([generatedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 11 — Integrations (ZATCA e-invoicing, webhooks, API keys, exports,
+// provider mocks). Conventions as Phase 0–10: UUIDv7 ids;
+// tenantId/createdAt/updatedAt/createdBy + @@index([tenantId]); money =
+// BigInt minor units + currency; no floats. Status/type fields are plain
+// strings; validation lives in @eserp/shared Zod DTOs.
+//
+// ZATCA honesty note: the XML/QR/hash are generated from real invoice data
+// (see @eserp/shared integrations.ts). Simulation is the default client and
+// is labelled *_SIMULATED everywhere. The sandbox client maps ZATCA's
+// published compliance/clearance/reporting API shape but degrades to
+// simulation when no credentials are configured; production clearance needs
+// real ZATCA onboarding (OTP + CCSID + production certificate) which only
+// the tenant can complete — see docs/erd-phase11.md.
+//
+// Field encryption (Phase 8 hardening): Employee.nationalId / iban are
+// stored AES-256-GCM encrypted ("enc1:..." values) by the HR service layer
+// from Phase 11 on; the columns stay String so legacy plaintext rows can
+// be encrypted in place by packages/db/prisma/scripts/encrypt-employee-fields.ts.
+// ---------------------------------------------------------------------------
+
+model ZatcaDocument {
+  id              String    @id @default(uuid(7))
+  tenantId        String
+  invoiceId       String
+  type            String    @default("SIMPLIFIED") // SIMPLIFIED (B2C) | STANDARD (B2B)
+  uuid            String    // ZATCA invoice UUID (generated per document)
+  xml             String    // UBL 2.1 XML payload (canonical, pre-hash form)
+  invoiceHash     String    // SHA-256 hex of the canonical XML
+  previousHash    String?   // hash of the previous document in the tenant chain
+  qrData          String    // TLV base64 QR payload (seller, VAT, timestamp, totals)
+  status          String    @default("DRAFT") // DRAFT | GENERATED | REPORTED | CLEARED | REJECTED | REPORTED_SIMULATED | CLEARED_SIMULATED
+  zatcaResponse   Json?     // raw ZATCA (or simulation) response payload
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  invoice SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WebhookEndpoint {
+  id         String   @id @default(uuid(7))
+  tenantId   String
+  name       String
+  url        String
+  secret     String   // HMAC-SHA256 signing secret (stored as given; keep it secret, rotate via update)
+  eventTypes Json     @default("[]") // array of subscribed outbox event-type strings
+  status     String   @default("DISABLED") // ACTIVE | DISABLED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?
+
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model WebhookDelivery {
+  id             String    @id @default(uuid(7))
+  tenantId       String
+  endpointId     String
+  eventType      String
+  payload        Json      // the outbox event payload delivered
+  attemptCount   Int       @default(0)
+  status         String    @default("PENDING") // PENDING | DELIVERED | FAILED
+  lastStatusCode Int?
+  lastResponse   String?   // truncated response body / error message
+  nextRetryAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([endpointId])
+  @@index([status])
+  @@index([nextRetryAt])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid(7))
+  tenantId   String
+  name       String
+  keyHash    String    // SHA-256 hex of the plaintext key; the plaintext is shown ONCE at creation and never stored
+  keyPrefix  String    // last 4 characters of the plaintext key, for identification
+  scopes     Json      @default("[]") // permission strings, e.g. ["sales-invoices:read"]
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  status     String    @default("ACTIVE") // ACTIVE | REVOKED
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  createdBy  String?
+
+  @@index([tenantId])
+  @@index([keyHash])
+  @@index([status])
+}
+
+model ExportJob {
+  id          String    @id @default(uuid(7))
+  tenantId    String
+  type        String    // contacts | items | sales-invoices | purchase-orders | journal-entries | stock-levels | employees
+  format      String    @default("CSV") // CSV | JSON
+  status      String    @default("PENDING") // PENDING | COMPLETED | FAILED
+  rowCount    Int       @default(0)
+  fileAssetId String?   // FileAsset id when the export is stored as a file (null in Phase 11: downloads are direct)
+  requestedBy String?   // User id (no FK)
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}

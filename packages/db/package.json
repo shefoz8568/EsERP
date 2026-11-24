@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "@eserp/shared": "workspace:*",
+    "@prisma/client": "^6.0.0",
+    "argon2": "^0.41.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "prisma": "^6.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "main": "./dist/src/index.js",
+  "name": "@eserp/db",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "lint": "eslint src prisma --ignore-pattern 'prisma/data/**'",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "seed": "tsx prisma/seed.ts",
+    "studio": "prisma studio",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "type": "commonjs",
+  "types": "./dist/src/index.d.ts",
+  "version": "0.1.0"
+}

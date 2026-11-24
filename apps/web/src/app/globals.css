@@ -1,0 +1,152 @@
+@import "../../../../packages/ui/src/styles/globals.css";
+
+/*
+ * Web-only globals + EsERP design-token foundation (research #2).
+ *
+ * One token set, defined here (shadcn-style HSL variables on :root /
+ * .dark, consumed by Tailwind theme tokens in tailwind.config.ts):
+ *  - colour: brand (primary) + semantic positive / critical / negative /
+ *    info, each with a *-foreground for text on that colour
+ *  - spacing: shell layout sizes (topbar, sidebar, nav item, table row)
+ *  - typography: type scale + tabular numerals for numbers
+ *  - radius: sm / md / lg / xl scale off --radius
+ *  - focus: visible focus-ring token (width + colour), WCAG 2.2
+ *  - density: --shell-row-height switches Comfortable 2.25rem (Fiori
+ *    regular) <-> Compact 1.625rem (Fiori compact) via .density-compact
+ *
+ * Dark mode (#10) is a real dark palette below — surfaces get lighter
+ * with elevation (background < card < popover) and semantic colours are
+ * brightened for contrast on dark, not an inverted light theme.
+ *
+ * RTL: layouts use Tailwind logical utilities (ms-/me-/ps-/pe-, start/end)
+ * throughout, so `dir="rtl"` on <html> flips the UI automatically.
+ * Never use physical ml-/mr-/pl-/pr- for directional spacing here.
+ */
+@layer base {
+  :root {
+    /* Semantic colours (Fiori Horizon values as the reference). */
+    --positive: 134 61% 41%; /* #256f3a green — success / approve */
+    --positive-foreground: 0 0% 100%;
+    --critical: 24 100% 45%; /* #e76500 orange — warning / needs attention */
+    --critical-foreground: 0 0% 100%;
+    --negative: 0 86% 35%; /* #aa0808 red — error / reject */
+    --negative-foreground: 0 0% 100%;
+    --info: 221 83% 53%; /* brand blue — informational */
+    --info-foreground: 0 0% 100%;
+
+    /* Radius scale (base --radius comes from @eserp/ui tokens). */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+
+    /* Typography scale. */
+    --text-display: 1.5rem;
+    --text-title: 1.25rem;
+    --text-body: 0.875rem;
+    --text-caption: 0.75rem;
+    --leading-body: 1.5;
+    --leading-arabic: 1.7;
+
+    /* Shell layout sizes. */
+    --shell-topbar-height: 4rem;
+    --shell-sidebar-width: 16rem;
+    --shell-sidebar-rail-width: 4.25rem;
+    --shell-nav-item-height: 2.5rem;
+    --shell-row-height: 2.25rem;
+
+    /* Focus ring (Fiori: 0.125rem width). */
+    --focus-ring-width: 0.125rem;
+    --focus-ring-color: 221 83% 53%;
+  }
+
+  .dark {
+    /* Real dark palette: elevated surfaces, not inverted light. */
+    --background: 222 47% 6%;
+    --card: 222 47% 9%;
+    --popover: 222 47% 12%;
+    --secondary: 217 33% 15%;
+    --muted: 217 33% 15%;
+    --accent: 217 33% 15%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --primary: 217 91% 65%;
+    --primary-foreground: 222 47% 11%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    /* Semantic colours brightened so they keep ≥4.5:1 on dark surfaces. */
+    --positive: 134 55% 55%;
+    --positive-foreground: 134 61% 12%;
+    --critical: 24 100% 58%;
+    --critical-foreground: 24 100% 12%;
+    --negative: 0 84% 62%;
+    --negative-foreground: 0 86% 12%;
+    --info: 217 91% 65%;
+    --info-foreground: 222 47% 11%;
+    --focus-ring-color: 217 91% 65%;
+  }
+
+  html {
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Noto Sans Arabic", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  body {
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+  }
+
+  [dir="rtl"] body {
+    font-family:
+      "Noto Sans Arabic", ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", Roboto, Arial, sans-serif;
+    /* Arabic glyphs need taller line-height; never letter-space Arabic. */
+    line-height: var(--leading-arabic);
+    letter-spacing: 0;
+  }
+
+  /* Visible focus ring everywhere, from the token (WCAG 2.2). */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid hsl(var(--focus-ring-color));
+    outline-offset: 2px;
+  }
+
+  /* Numbers line up in tables/reports. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * Density (#3): `.density-compact` on <html> (persisted per user in
+ * localStorage, applied pre-paint by the layout init script). Tightens
+ * the shell and every table that uses the shared Table primitives —
+ * the shared primitives set their own padding via Tailwind utilities,
+ * so these unlayered rules win over the layered utilities.
+ */
+.density-compact {
+  --shell-nav-item-height: 2rem;
+  --shell-row-height: 1.625rem;
+  --shell-topbar-height: 3.5rem;
+}
+
+.density-compact table th,
+.density-compact table td {
+  padding-block: 0.25rem;
+}
+
+.density-compact [data-shell-nav-item] {
+  padding-block: 0.25rem;
+}
+
+/*
+ * Mobile shell (#11): below lg, interactive shell targets are at
+ * least 44px so the drawer/topbar are usable one-handed.
+ */
+@media (max-width: 1023px) {
+  [data-shell-nav-item],
+  header [data-shell-topbar-action] {
+    min-height: 44px;
+  }
+}

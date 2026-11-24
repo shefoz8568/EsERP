@@ -1,0 +1,108 @@
+# EsERP — local development stack (one command: `docker compose up -d`)
+# Services: PostgreSQL 16 (RLS), Redis 7 (BullMQ), MinIO (S3-compatible files),
+# MailHog (captures outbound mail), plus the api + web apps.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eserp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eserp_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-eserp}
+      # Password for the least-privilege runtime role (see init script).
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-eserp_app_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates the `eserp_app` runtime role (least privilege) on first boot.
+      # The API must never connect as POSTGRES_USER (a superuser): superusers
+      # bypass RLS, which would void tenant isolation at the database level.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # RLS bootstrap runs once via Prisma migrations; see packages/db/prisma/rls.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eserp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      # Runtime connects as the least-privilege `eserp_app` role (created by
+      # docker/postgres/init/01-app-user.sh on first boot). Migrations and
+      # the seed run from the host with the owner URL instead (see README).
+      DATABASE_URL: "postgresql://eserp_app:${POSTGRES_APP_PASSWORD:-eserp_app_password}@postgres:5432/${POSTGRES_DB:-eserp}?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      API_PORT: "3001"
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access-secret-min-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-secret-min-32-chars}
+      S3_ENDPOINT: "http://minio:9000"
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-eserp-files}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_FROM: ${SMTP_FROM:-EsERP <noreply@eserp.local>}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001/api/v1"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

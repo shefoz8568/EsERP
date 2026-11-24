@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": ".",
+    "target": "ES2022"
+  },
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src",
+    "prisma/seed.ts"
+  ]
+}

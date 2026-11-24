@@ -1,0 +1,345 @@
+[
+  {
+    "code": "1000",
+    "nameAr": "النقدية وما في حكمها",
+    "nameEn": "Cash and Cash Equivalents",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "1010",
+    "nameAr": "الصندوق",
+    "nameEn": "Cash on Hand",
+    "type": "ASSET",
+    "parentCode": "1000"
+  },
+  {
+    "code": "1020",
+    "nameAr": "البنوك - الحسابات الجارية",
+    "nameEn": "Banks - Current Accounts",
+    "type": "ASSET",
+    "parentCode": "1000"
+  },
+  {
+    "code": "1030",
+    "nameAr": "مدفوعات البطاقات قيد التحصيل",
+    "nameEn": "Card Payments Clearing",
+    "type": "ASSET",
+    "parentCode": "1000"
+  },
+  {
+    "code": "1100",
+    "nameAr": "الذمم المدينة - العملاء",
+    "nameEn": "Accounts Receivable - Customers",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "1110",
+    "nameAr": "عملاء - محلي",
+    "nameEn": "Customers - Local",
+    "type": "ASSET",
+    "parentCode": "1100"
+  },
+  {
+    "code": "1200",
+    "nameAr": "المخزون",
+    "nameEn": "Inventory",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "1210",
+    "nameAr": "مخزون البضائع",
+    "nameEn": "Merchandise Inventory",
+    "type": "ASSET",
+    "parentCode": "1200"
+  },
+  {
+    "code": "1220",
+    "nameAr": "إنتاج تحت التشغيل",
+    "nameEn": "Work in Progress",
+    "type": "ASSET",
+    "parentCode": "1200"
+  },
+  {
+    "code": "1230",
+    "nameAr": "مخزون المنتجات التامة",
+    "nameEn": "Finished Goods Inventory",
+    "type": "ASSET",
+    "parentCode": "1200"
+  },
+  {
+    "code": "1300",
+    "nameAr": "المصروفات المدفوعة مقدماً",
+    "nameEn": "Prepaid Expenses",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "1400",
+    "nameAr": "الأصول الثابتة",
+    "nameEn": "Fixed Assets",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "1410",
+    "nameAr": "المعدات والأثاث",
+    "nameEn": "Equipment and Furniture",
+    "type": "ASSET",
+    "parentCode": "1400"
+  },
+  {
+    "code": "1420",
+    "nameAr": "مجمع إهلاك الأصول الثابتة",
+    "nameEn": "Accumulated Depreciation",
+    "type": "ASSET",
+    "parentCode": "1400"
+  },
+  {
+    "code": "1500",
+    "nameAr": "أصول أخرى",
+    "nameEn": "Other Assets",
+    "type": "ASSET",
+    "parentCode": null
+  },
+  {
+    "code": "2000",
+    "nameAr": "الذمم الدائنة - الموردون",
+    "nameEn": "Accounts Payable - Suppliers",
+    "type": "LIABILITY",
+    "parentCode": null
+  },
+  {
+    "code": "2010",
+    "nameAr": "موردون - محلي",
+    "nameEn": "Suppliers - Local",
+    "type": "LIABILITY",
+    "parentCode": "2000"
+  },
+  {
+    "code": "2020",
+    "nameAr": "بضائع مستلمة ولم تصل فواتيرها",
+    "nameEn": "Goods Received Not Invoiced",
+    "type": "LIABILITY",
+    "parentCode": "2000"
+  },
+  {
+    "code": "2100",
+    "nameAr": "ضريبة القيمة المضافة المستحقة",
+    "nameEn": "VAT Payable",
+    "type": "LIABILITY",
+    "parentCode": null
+  },
+  {
+    "code": "2110",
+    "nameAr": "ضريبة القيمة المضافة - المخرجات",
+    "nameEn": "VAT - Output Tax",
+    "type": "LIABILITY",
+    "parentCode": "2100"
+  },
+  {
+    "code": "2120",
+    "nameAr": "ضريبة القيمة المضافة - المدخلات",
+    "nameEn": "VAT - Input Tax",
+    "type": "LIABILITY",
+    "parentCode": "2100"
+  },
+  {
+    "code": "2200",
+    "nameAr": "المصروفات المستحقة",
+    "nameEn": "Accrued Expenses",
+    "type": "LIABILITY",
+    "parentCode": null
+  },
+  {
+    "code": "2210",
+    "nameAr": "التأمينات الاجتماعية المستحقة",
+    "nameEn": "GOSI Payable",
+    "type": "LIABILITY",
+    "parentCode": "2200"
+  },
+  {
+    "code": "2220",
+    "nameAr": "صافي الرواتب المستحقة",
+    "nameEn": "Net Salaries Payable",
+    "type": "LIABILITY",
+    "parentCode": "2200"
+  },
+  {
+    "code": "2230",
+    "nameAr": "مخصص مكافأة نهاية الخدمة",
+    "nameEn": "End of Service Provision",
+    "type": "LIABILITY",
+    "parentCode": "2200"
+  },
+  {
+    "code": "2240",
+    "nameAr": "استقطاعات أخرى مستحقة للموظفين",
+    "nameEn": "Other Payroll Deductions Payable",
+    "type": "LIABILITY",
+    "parentCode": "2200"
+  },
+  {
+    "code": "2300",
+    "nameAr": "القروض قصيرة الأجل",
+    "nameEn": "Short-term Loans",
+    "type": "LIABILITY",
+    "parentCode": null
+  },
+  {
+    "code": "2400",
+    "nameAr": "القروض طويلة الأجل",
+    "nameEn": "Long-term Loans",
+    "type": "LIABILITY",
+    "parentCode": null
+  },
+  {
+    "code": "3000",
+    "nameAr": "رأس المال",
+    "nameEn": "Share Capital",
+    "type": "EQUITY",
+    "parentCode": null
+  },
+  {
+    "code": "3100",
+    "nameAr": "الأرباح المحتجزة",
+    "nameEn": "Retained Earnings",
+    "type": "EQUITY",
+    "parentCode": null
+  },
+  {
+    "code": "3200",
+    "nameAr": "أرباح / خسائر السنة",
+    "nameEn": "Current Year Profit / Loss",
+    "type": "EQUITY",
+    "parentCode": null
+  },
+  {
+    "code": "4000",
+    "nameAr": "إيرادات المبيعات",
+    "nameEn": "Sales Revenue",
+    "type": "REVENUE",
+    "parentCode": null
+  },
+  {
+    "code": "4010",
+    "nameAr": "مبيعات البضائع",
+    "nameEn": "Merchandise Sales",
+    "type": "REVENUE",
+    "parentCode": "4000"
+  },
+  {
+    "code": "4100",
+    "nameAr": "إيرادات أخرى",
+    "nameEn": "Other Income",
+    "type": "REVENUE",
+    "parentCode": null
+  },
+  {
+    "code": "4110",
+    "nameAr": "أرباح تسويات المخزون",
+    "nameEn": "Inventory Adjustment Gains",
+    "type": "REVENUE",
+    "parentCode": "4100"
+  },
+  {
+    "code": "5000",
+    "nameAr": "تكلفة البضاعة المباعة",
+    "nameEn": "Cost of Goods Sold",
+    "type": "EXPENSE",
+    "parentCode": null
+  },
+  {
+    "code": "5010",
+    "nameAr": "تكلفة البضاعة المباعة",
+    "nameEn": "Cost of Goods Sold",
+    "type": "EXPENSE",
+    "parentCode": "5000"
+  },
+  {
+    "code": "5100",
+    "nameAr": "مشتريات البضائع",
+    "nameEn": "Merchandise Purchases",
+    "type": "EXPENSE",
+    "parentCode": "5000"
+  },
+  {
+    "code": "5200",
+    "nameAr": "مصروفات التشغيل",
+    "nameEn": "Operating Expenses",
+    "type": "EXPENSE",
+    "parentCode": null
+  },
+  {
+    "code": "5210",
+    "nameAr": "الرواتب والأجور",
+    "nameEn": "Salaries and Wages",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5211",
+    "nameAr": "اشتراكات التأمينات الاجتماعية - حصة صاحب العمل",
+    "nameEn": "GOSI Employer Contributions",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5212",
+    "nameAr": "مصروف مكافأة نهاية الخدمة",
+    "nameEn": "End of Service Benefits Expense",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5220",
+    "nameAr": "الإيجارات",
+    "nameEn": "Rent",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5230",
+    "nameAr": "مصروفات التسويق",
+    "nameEn": "Marketing Expenses",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5240",
+    "nameAr": "تسويات المخزون والفاقد",
+    "nameEn": "Inventory Adjustments and Shrinkage",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5250",
+    "nameAr": "عجز / زيادة الصندوق",
+    "nameEn": "Cash Over / Short",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5260",
+    "nameAr": "خسائر الهالك / التالف",
+    "nameEn": "Scrap Loss",
+    "type": "EXPENSE",
+    "parentCode": "5200"
+  },
+  {
+    "code": "5300",
+    "nameAr": "مصروفات إدارية وعمومية",
+    "nameEn": "General and Administrative Expenses",
+    "type": "EXPENSE",
+    "parentCode": null
+  },
+  {
+    "code": "5400",
+    "nameAr": "مصروفات ضريبة القيمة المضافة غير القابلة للاسترداد",
+    "nameEn": "Non-recoverable VAT Expense",
+    "type": "EXPENSE",
+    "parentCode": null
+  }
+]

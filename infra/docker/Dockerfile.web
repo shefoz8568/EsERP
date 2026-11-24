@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1
+# EsERP Web image — multi-stage Node 20 (Alpine).
+#
+# NOTE ON STANDALONE OUTPUT: apps/web/next.config.mjs (as built by the web
+# worker) does NOT set `output: 'standalone'`, so this Dockerfile does NOT
+# rely on `.next/standalone`. It runs a standard `next build` followed by
+# `next start -p 3000`, copying the full `.next` output plus the workspace
+# node_modules the app needs at runtime. If the web app later enables
+# `output: 'standalone'`, the runtime stage can be slimmed to copy only
+# `.next/standalone` + `.next/static` + `public/` — see the commented
+# alternative at the bottom of this file.
+#
+# Stage 1 (deps): installs the whole workspace's dependencies.
+# Stage 2 (build): compiles @eserp/web (Next.js 15 App Router) with its
+# workspace dependencies (@eserp/ui, @eserp/i18n, @eserp/shared).
+# Stage 3 (runtime): slim image running `next start` on port 3000.
+#
+# Build from the repository root:
+#   docker build -f infra/docker/Dockerfile.web -t eserp-web .
+# (docker-compose.yml already wires this up: `docker compose up -d --build web`.)
+#
+# NEXT_PUBLIC_API_URL is baked in at build time by Next.js — pass it as a
+# build arg so the browser bundle points at the right API:
+#   docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 \
+#     -f infra/docker/Dockerfile.web -t eserp-web .
+
+FROM node:20-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/api/package.json apps/api/
+COPY packages/db/package.json packages/db/
+COPY packages/shared/package.json packages/shared/
+COPY packages/i18n/package.json packages/i18n/
+COPY packages/ui/package.json packages/ui/
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+FROM node:20-alpine AS build
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps ./apps
+COPY --from=deps /app/packages ./packages
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/db packages/db
+COPY packages/shared packages/shared
+COPY packages/i18n packages/i18n
+COPY packages/ui packages/ui
+COPY apps/web apps/web
+RUN pnpm --filter @eserp/web build
+
+FROM node:20-alpine AS runtime
+RUN corepack enable && corepack prepare pnpm@9 --activate
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+WORKDIR /app/apps/web
+USER node
+# Preserve the workspace layout: the built app (with .next/), the workspace
+# packages it imports, and the installed node_modules (pnpm symlinks live
+# per-package, so the whole apps/ + packages/ trees are copied).
+COPY --from=build --chown=node:node /app/apps /app/apps
+COPY --from=build --chown=node:node /app/packages /app/packages
+COPY --from=build --chown=node:node /app/node_modules /app/node_modules
+COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml /app/
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/ || exit 1
+
+CMD ["pnpm", "start"]
+# NOTE: `pnpm start` runs `next start -p 3000` (see apps/web/package.json).
+# If standalone output is enabled later, replace the runtime stage with:
+#   COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
+#   COPY --from=build --chown=node:node /app/apps/web/.next/static ./.next/static
+#   COPY --from=build --chown=node:node /app/apps/web/public ./public
+#   CMD ["node", "server.js"]
