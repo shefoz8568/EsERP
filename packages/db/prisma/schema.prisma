@@ -1323,7 +1323,7 @@ model StockMovement {
   itemId                String
   warehouseId           String
   destinationWarehouseId String?
-  quantity              BigInt // always positive; direction is implied by type
+  quantity              BigInt // signed for ADJUSTMENT movements (negative = removal); otherwise positive, direction implied by type
   unitCostMinor         BigInt   @default(0)
   totalCostMinor        BigInt   @default(0)
   currency              String   @default("SAR")
