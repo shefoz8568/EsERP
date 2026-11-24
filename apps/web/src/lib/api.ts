@@ -293,6 +293,10 @@ function normalizeAuth(raw: RawAuthResponse): LoginResponse {
       tenantId: u?.tenantId ?? "",
       locale: u?.locale ?? "en",
       roles: u?.roles ?? [],
+      // Login responses carry no permissions; AuthProvider refetches
+      // /auth/me after login so the UI can gate on them. Leave undefined
+      // (not []) so permission checks fail open until then.
+      permissions: u?.permissions,
     },
   };
 }
@@ -305,6 +309,7 @@ function normalizeAuthUser(raw: RawAuthUser): import("./types").AuthUser {
     tenantId: raw.tenantId,
     locale: raw.locale ?? "en",
     roles: raw.roles ?? [],
+    permissions: raw.permissions,
   };
 }
 
