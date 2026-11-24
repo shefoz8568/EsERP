@@ -14,6 +14,9 @@ import { UnitsTab } from "@/components/settings/UnitsTab";
 import { UsersRolesTab } from "@/components/settings/UsersRolesTab";
 import { WarehousesTab } from "@/components/settings/WarehousesTab";
 
+import { useAuth } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
+
 const TABS = [
   "company",
   "currencies",
@@ -27,6 +30,25 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number];
+
+/**
+ * Permission needed to see each tab. The API already 403s the underlying
+ * endpoints; hiding the tab keeps users from opening a page that can
+ * only show a generic error. Tabs without a settings permission of
+ * their own use the module read permission (warehouses:read after the
+ * settings controller was aligned to the role matrix).
+ */
+const TAB_PERMISSIONS: Record<TabId, string> = {
+  company: "settings:read",
+  currencies: "settings:read",
+  taxes: "settings:read",
+  units: "settings:read",
+  numbering: "settings:read",
+  warehouses: "warehouses:read",
+  users: "users:read",
+  roles: "roles:read",
+  audit: "audit:read",
+};
 
 const TAB_LABEL_KEYS: Record<TabId, string> = {
   company: "settings.companyProfile",
@@ -44,8 +66,21 @@ function SettingsContent({ locale }: { locale: string }) {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const raw = searchParams.get("tab") ?? "company";
-  const tab: TabId = (TABS as readonly string[]).includes(raw) ? (raw as TabId) : "company";
+  const { user } = useAuth();
+  const visibleTabs = TABS.filter((id) => hasPermission(user?.permissions, TAB_PERMISSIONS[id]));
+  const raw = searchParams.get("tab") ?? visibleTabs[0] ?? "company";
+  // A bookmarked / deep-linked tab the user may not see falls back to
+  // their first visible tab instead of rendering an error screen.
+  const tab: TabId = (visibleTabs as readonly string[]).includes(raw) ? (raw as TabId) : (visibleTabs[0] ?? "company");
+
+  if (visibleTabs.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("common.noData")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -56,7 +91,7 @@ function SettingsContent({ locale }: { locale: string }) {
         className="space-y-4"
       >
         <TabsList className="flex h-auto flex-wrap justify-start gap-1">
-          {TABS.map((id) => (
+          {visibleTabs.map((id) => (
             <TabsTrigger key={id} value={id}>
               {t(TAB_LABEL_KEYS[id] as never)}
             </TabsTrigger>
