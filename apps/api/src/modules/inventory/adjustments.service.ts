@@ -136,6 +136,22 @@ export class AdjustmentsService {
           });
           unitCost = issued.unitCostMinor;
           lineValue = -issued.totalCostMinor;
+          // Preserve the adjustment direction on the ledger row: the
+          // stock engine records every movement with a positive
+          // quantity, so a −2 removal and a +2 addition would otherwise
+          // produce byte-identical rows (type ADJUSTMENT, quantity 2).
+          // Negate this line's movement quantity so removals show as
+          // negative in Stock Movements. Stock levels and the journal
+          // above are untouched (they already apply the sign).
+          const movement = await (tx as any).stockMovement.findFirst({
+            where: { tenantId, sourceType: 'ADJUSTMENT', sourceId: line.id },
+          });
+          if (movement) {
+            await (tx as any).stockMovement.update({
+              where: { id: movement.id },
+              data: { quantity: -BigInt(movement.quantity) },
+            });
+          }
         }
         netValue += lineValue;
         await (tx as any).stockAdjustmentLine.update({
