@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   costCenterDto,
@@ -183,6 +183,7 @@ export class AccountingController {
   @Get('reports/trial-balance')
   @Permissions('accounting:read')
   trialBalance(@CurrentTenantId() t: string, @Query('fiscalPeriodId') fiscalPeriodId: string) {
+    if (!fiscalPeriodId) throw new BadRequestException('fiscalPeriodId query parameter is required');
     return this.reports.trialBalance(t, fiscalPeriodId);
   }
 
@@ -193,12 +194,14 @@ export class AccountingController {
     @Query('accountId') accountId: string,
     @Query('from') from?: string, @Query('to') to?: string,
   ) {
+    if (!accountId) throw new BadRequestException('accountId query parameter is required');
     return this.reports.generalLedger(t, accountId, from, to);
   }
 
   @Get('reports/vat-summary')
   @Permissions('accounting:read')
   vatSummary(@CurrentTenantId() t: string, @Query('fiscalPeriodId') fiscalPeriodId: string) {
+    if (!fiscalPeriodId) throw new BadRequestException('fiscalPeriodId query parameter is required');
     return this.reports.vatSummary(t, fiscalPeriodId);
   }
 }
