@@ -15,6 +15,13 @@ export interface AuthUser {
   tenantId: string;
   locale: string;
   roles: string[];
+  /**
+   * Expanded permission names from GET /auth/me (e.g. "warehouses:read").
+   * Undefined when the server response did not carry them (login/register
+   * responses) — callers must fail open in that case, the API still
+   * enforces authorisation. AuthProvider fills this in from /auth/me.
+   */
+  permissions?: string[];
 }
 
 /** Raw user object as returned by the API (flat, no `name` field). */
