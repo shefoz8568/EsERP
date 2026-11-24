@@ -62,3 +62,38 @@ export const ALL_PERMISSIONS: string[] = [...SHARED_PERMISSIONS];
 
 /** Built-in role names from @eserp/shared (same list the API seeds). */
 export const ROLES = ROLE_NAMES;
+
+/**
+ * Client-side permission checks. The permission list comes from
+ * GET /auth/me (see AuthUser.permissions); the API remains the real
+ * enforcement point — these helpers only hide UI the user cannot use.
+ *
+ * `permissions === undefined` means "not loaded yet" (login/register
+ * responses carry no permissions; AuthProvider refetches /auth/me):
+ * fail open so a slow load never locks the user out of a page the API
+ * would allow. A defined list (even empty) is enforced strictly; "*"
+ * (OWNER/ADMIN) grants everything.
+ */
+export function hasPermission(
+  permissions: string[] | undefined,
+  permission: string,
+): boolean {
+  if (permissions === undefined) return true;
+  return permissions.includes("*") || permissions.includes(permission);
+}
+
+/** True when the user holds every listed permission. */
+export function hasAllPermissions(
+  permissions: string[] | undefined,
+  required: string[],
+): boolean {
+  return required.every((p) => hasPermission(permissions, p));
+}
+
+/**
+ * Admin check, same rule as the sidebar: OWNER/ADMIN roles, or an
+ * unknown (empty) role list — fail open and let the API enforce.
+ */
+export function isAdminUser(roles: string[] | undefined): boolean {
+  return !roles || roles.length === 0 || roles.includes("OWNER") || roles.includes("ADMIN");
+}
