@@ -99,23 +99,23 @@ export class SettingsController {
   }
 
   @Get('warehouses')
-  @Permissions('settings:read')
+  @Permissions('warehouses:read')
   listWarehouses(@CurrentTenantId() t: string) { return this.settings.listWarehouses(t); }
 
   @Post('warehouses')
-  @Permissions('settings:manage')
+  @Permissions('warehouses:manage')
   createWarehouse(@CurrentTenantId() t: string, @CurrentUserId() u: string, @Body() body: unknown) {
     return this.settings.createWarehouse(t, u, warehouseDto.parse(body));
   }
 
   @Patch('warehouses/:id')
-  @Permissions('settings:manage')
+  @Permissions('warehouses:manage')
   updateWarehouse(@CurrentTenantId() t: string, @CurrentUserId() u: string, @Param('id') id: string, @Body() body: any) {
     return this.settings.updateWarehouse(t, u, id, body);
   }
 
   @Delete('warehouses/:id')
-  @Permissions('settings:manage')
+  @Permissions('warehouses:manage')
   deleteWarehouse(@CurrentTenantId() t: string, @CurrentUserId() u: string, @Param('id') id: string) {
     return this.settings.deleteWarehouse(t, u, id);
   }
