@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, toast } from "@eserp/ui";
 import { asList, hrApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { AppShell } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -16,6 +18,11 @@ export default function PayrollRunsPage({ params }: { params: Promise<{ locale: 
   const { locale } = use(params);
   const t = useTranslations();
   const queryClient = useQueryClient();
+  // Approve and Pay both require payroll:approve on the API; HR has
+  // payroll:manage but not payroll:approve, so hide them instead of
+  // letting the click land on a 403 toast.
+  const { user } = useAuth();
+  const canApprove = hasPermission(user?.permissions, "payroll:approve");
   const now = new Date();
   const [periodYear, setPeriodYear] = useState(String(now.getFullYear()));
   const [periodMonth, setPeriodMonth] = useState(String(now.getMonth() + 1));
@@ -58,8 +65,8 @@ export default function PayrollRunsPage({ params }: { params: Promise<{ locale: 
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setSelectedId(row.original.id)}>{t("common.viewAll")}</Button>
           {(row.original.status === "DRAFT" || row.original.status === "CALCULATED") && <Button size="sm" onClick={() => calculate.mutate(row.original.id)}>{t("hr.calculate")}</Button>}
-          {row.original.status === "CALCULATED" && <Button size="sm" onClick={() => approve.mutate(row.original.id)}>{t("hr.approve")}</Button>}
-          {row.original.status === "APPROVED" && <Button size="sm" onClick={() => pay.mutate(row.original.id)}>{t("hr.pay")}</Button>}
+          {canApprove && row.original.status === "CALCULATED" && <Button size="sm" onClick={() => approve.mutate(row.original.id)}>{t("hr.approve")}</Button>}
+          {canApprove && row.original.status === "APPROVED" && <Button size="sm" onClick={() => pay.mutate(row.original.id)}>{t("hr.pay")}</Button>}
           {row.original.status === "DRAFT" && <Button size="sm" variant="outline" onClick={() => remove.mutate(row.original.id)}>{t("common.delete")}</Button>}
         </div>
       ),
