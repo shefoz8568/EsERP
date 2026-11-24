@@ -206,7 +206,13 @@ export default function DashboardPage({
   const arAging = useQuery({ queryKey: ["ar-aging", "dashboard"], queryFn: () => salesApi.arAging() });
   const apAging = useQuery({ queryKey: ["ap-aging", "dashboard"], queryFn: () => purchasingApi.apAging() });
 
-  const failed = company.isError || users.isError || activity.isError;
+  // NOTE: no whole-page error gate here on purpose. The auxiliary
+  // queries (users, audit log) 403 for several roles — e.g. ACCOUNTANT
+  // has no users:read, SALES/WAREHOUSE have no settings:read — and
+  // they only feed a count / one section. Failing the entire dashboard
+  // with "Something went wrong" because a non-essential query 403s
+  // made the home page unusable for non-admin roles. Each section
+  // degrades on its own instead (see the activity card below).
   const companyName = companyDisplayName(company.data);
   const onboardingDone = isOnboardingComplete(onboarding.data);
 
@@ -215,7 +221,10 @@ export default function DashboardPage({
   const overdueInvoices = useMemo(
     () =>
       invoiceList.filter(
-        (i) => i.dueDate.slice(0, 10) < today && !["PAID", "VOID"].includes(i.status),
+        (i) =>
+          // dueDate is nullable: an invoice without one is never overdue.
+          // (Unguarded .slice() here used to crash the whole dashboard.)
+          i.dueDate && i.dueDate.slice(0, 10) < today && !["PAID", "VOID"].includes(i.status),
       ),
     [invoiceList, today],
   );
@@ -265,7 +274,7 @@ export default function DashboardPage({
             ...unpaidInvoices.slice(0, 5).map((i) => ({
               key: `inv-${i.id}`,
               label: `${i.number} · ${i.customer?.displayName ?? ""}`,
-              detail: `${t("sales.dueDate")}: ${i.dueDate.slice(0, 10)} · ${formatMoney(i.totalMinor - i.paidMinor, i.currency, locale)}`,
+              detail: `${t("sales.dueDate")}: ${i.dueDate?.slice(0, 10) ?? "—"} · ${formatMoney(i.totalMinor - i.paidMinor, i.currency, locale)}`,
               href: `/${locale}/sales-invoices`,
             })),
             ...openSalesOrders.slice(0, 5).map((o) => ({
@@ -387,7 +396,9 @@ export default function DashboardPage({
             <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
           </CardHeader>
           <CardContent>
-            {activity.isLoading ? (
+            {activity.isError ? (
+              <ErrorState onRetry={() => void activity.refetch()} />
+            ) : activity.isLoading ? (
               <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
             ) : asList(activity.data).length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("dashboard.noActivity")}</p>
@@ -493,18 +504,9 @@ export default function DashboardPage({
         </div>
         <p className="text-xs text-muted-foreground">{t("dashboard.customizeHint")}</p>
 
-        {failed ? (
-          <ErrorState
-            onRetry={() => {
-              void company.refetch();
-              void users.refetch();
-              void activity.refetch();
-            }}
-          />
-        ) : (
-          <div className="space-y-6">
-            {visibleSections.map((sectionId) => (
-              <section key={sectionId} aria-label={sections[sectionId].title}>
+        <div className="space-y-6">
+          {visibleSections.map((sectionId) => (
+            <section key={sectionId} aria-label={sections[sectionId].title}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                     {sections[sectionId].title}
@@ -542,9 +544,9 @@ export default function DashboardPage({
                   </div>
                 </div>
                 {sections[sectionId].content}
-              </section>
-            ))}
-            {hiddenSections.length > 0 && (
+            </section>
+          ))}
+          {hiddenSections.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="h-4 w-4" aria-hidden />
                 {hiddenSections.map((sectionId) => (
@@ -559,9 +561,8 @@ export default function DashboardPage({
                   </Button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </AppShell>
   );
