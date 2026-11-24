@@ -37,7 +37,21 @@ export default function StockMovementsPage({ params }: { params: Promise<{ local
     { accessorKey: "sourceType", header: t("inventory.source"), cell: ({ row }) => row.original.sourceType },
     { accessorKey: "reference", header: t("common.name"), cell: ({ row }) => row.original.reference ?? "—" },
     { accessorKey: "warehouse", header: t("inventory.warehouse"), cell: ({ row }) => row.original.warehouse?.name ?? "—" },
-    { accessorKey: "quantity", header: t("sales.quantity") },
+    {
+      accessorKey: "quantity",
+      header: t("sales.quantity"),
+      // Adjustment removals are stored with a negative quantity (see
+      // AdjustmentsService.post); show the sign so a −2 removal is not
+      // mistaken for a +2 addition. Other movement types stay positive.
+      cell: ({ row }) => {
+        const q = row.original.quantity;
+        return q < 0 ? (
+          <span className="font-medium text-destructive">−{Math.abs(q)}</span>
+        ) : (
+          <span className="tabular-nums">{q}</span>
+        );
+      },
+    },
     { accessorKey: "totalCostMinor", header: t("sales.total"), cell: ({ row }) => formatMoney(row.original.totalCostMinor, row.original.currency, locale) },
   ];
 
