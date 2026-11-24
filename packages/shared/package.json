@@ -7,13 +7,17 @@
     "vitest": "^2.1.8"
   },
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist-esm/index.js",
+      "require": "./dist/index.js"
+    }
   },
   "main": "./dist/index.js",
   "name": "@eserp/shared",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json && node ./scripts/write-esm-package-json.mjs",
     "lint": "eslint src",
     "test": "vitest run",
     "test:unit": "vitest run",
