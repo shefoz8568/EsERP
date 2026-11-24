@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   attendanceBulkDto,
@@ -204,6 +204,7 @@ export class HrController {
   @Get('hr/leave-balances')
   @Permissions('leave:read')
   leaveBalances(@CurrentTenantId() t: string, @Query('employeeId') employeeId: string, @Query('year') year?: string) {
+    if (!employeeId) throw new BadRequestException('employeeId query parameter is required');
     return this.leave.balances(t, employeeId, Number(year) || new Date().getUTCFullYear());
   }
 
@@ -237,7 +238,12 @@ export class HrController {
     @CurrentTenantId() t: string,
     @Query('year') year: string, @Query('month') month: string, @Query('employeeId') employeeId?: string,
   ) {
-    return this.attendance.monthlySummary(t, Number(year), Number(month), employeeId);
+    const y = Number(year);
+    const m = Number(month);
+    if (!year || !month || !Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+      throw new BadRequestException('year and month query parameters are required and must be valid numbers (month 1-12)');
+    }
+    return this.attendance.monthlySummary(t, y, m, employeeId);
   }
 
   @Patch('hr/attendance/:id')
