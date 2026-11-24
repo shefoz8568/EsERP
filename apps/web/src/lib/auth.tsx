@@ -86,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken ?? "" });
     setUser(res.user);
     setMfaToken(null);
+    // The login response carries no permissions; fetch /auth/me so the
+    // UI can gate tabs/buttons on them right away instead of waiting
+    // for the next mount. Best-effort: the login user stays if it fails.
+    void authApi.me().then(({ user: me }) => setUser(me)).catch(() => undefined);
     return { mfaRequired: false };
   }, []);
 
@@ -127,6 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken ?? "" });
       setUser(res.user);
       setMfaToken(null);
+      // As in login: the MFA response carries no permissions.
+      void authApi.me().then(({ user: me }) => setUser(me)).catch(() => undefined);
     },
     [mfaToken],
   );
