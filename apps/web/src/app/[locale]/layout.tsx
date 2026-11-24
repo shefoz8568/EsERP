@@ -1,5 +1,5 @@
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages } from "next-intl/server";
+import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { dirFor, locales } from "@eserp/i18n";
@@ -27,6 +27,13 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
   if (!(locales as readonly string[]).includes(locale)) notFound();
+
+  // Required for static rendering (generateStaticParams above): without
+  // this, next-intl cannot read the locale from the request/middleware
+  // during prerendering, getRequestConfig falls back to the default
+  // locale and every /ar/ page renders English strings (layout dir was
+  // still rtl because it comes from the URL param, not the messages).
+  setRequestLocale(locale);
 
   const messages = await getMessages();
 
