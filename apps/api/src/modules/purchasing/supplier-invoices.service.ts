@@ -150,7 +150,9 @@ export class SupplierInvoicesService {
    * counts input VAT exactly once (it treats 2020 as an input-VAT base).
    * When linked to a PO, the 3-way match runs first: invoiced qty (incl.
    * already-invoiced qty on the same PO line) must not exceed the PO
-   * ordered qty, and unit-price variance over 5% blocks posting (400).
+   * ordered qty, must not exceed the qty actually received (goods must be
+   * received before they can be invoiced), and unit-price variance over 5%
+   * blocks posting (400).
    * The tax rate is linked on the purchases line only, so the Phase 2 VAT
    * summary counts input VAT exactly once.
    */
@@ -249,10 +251,33 @@ export class SupplierInvoicesService {
     for (const l of otherLines) {
       alreadyByLine.set(l.purchaseOrderLineId, (alreadyByLine.get(l.purchaseOrderLineId) ?? 0n) + BigInt(l.quantity));
     }
+    // Received quantities per PO line, from POSTED goods receipts only.
+    // Invoicing goods that have not been received is blocked below: the
+    // cumulative invoiced qty (incl. this invoice) must not exceed what
+    // has actually been received (net of already-invoiced qty).
+    const linkedLineIds = [...new Set(invoice.lines.filter((l: any) => l.purchaseOrderLineId).map((l: any) => l.purchaseOrderLineId))];
+    const receivedByLine = new Map<string, bigint>();
+    if (linkedLineIds.length > 0) {
+      const receipts: any[] = await tx.goodsReceiptLine.findMany({
+        where: { tenantId, purchaseOrderLineId: { in: linkedLineIds }, goodsReceipt: { status: 'POSTED' } },
+        select: { purchaseOrderLineId: true, quantityReceived: true },
+      });
+      for (const r of receipts) {
+        receivedByLine.set(r.purchaseOrderLineId, (receivedByLine.get(r.purchaseOrderLineId) ?? 0n) + BigInt(r.quantityReceived));
+      }
+    }
     for (const line of invoice.lines) {
       if (!line.purchaseOrderLineId) continue;
       const poLine = po.lines.find((l: any) => l.id === line.purchaseOrderLineId);
       if (!poLine) throw new BadRequestException(`Purchase order line not found: ${line.purchaseOrderLineId}`);
+      const received = receivedByLine.get(poLine.id) ?? 0n;
+      const alreadyInvoiced = alreadyByLine.get(poLine.id) ?? 0n;
+      const receivable = received - alreadyInvoiced;
+      if (BigInt(line.quantity) > receivable) {
+        throw new BadRequestException(
+          `3-way match failed for ${po.number} line ${poLine.lineOrder + 1}: invoiced quantity ${line.quantity} exceeds received quantity ${received} (already invoiced ${alreadyInvoiced}) — goods must be received before they can be invoiced`,
+        );
+      }
       const err = threeWayMatchError({
         poQuantity: poLine.quantityOrdered,
         alreadyInvoicedQuantity: alreadyByLine.get(poLine.id) ?? 0n,
